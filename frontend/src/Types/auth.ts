@@ -6,13 +6,17 @@ export type RegisterForm = {
 };
 
 export type AuthResponse = {
-    data(arg0: string, data: any): unknown;
-    message: string;
-    user?: {
+  message: string;
+  user?: {
     id: number;
     full_name: string;
     username: string;
     email: string;
   };
-  token?: string;
-}
+};
+
+
+export type LoginForm = {
+  identifier: string;
+  password: string;
+};

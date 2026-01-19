@@ -23,18 +23,19 @@ export async function handleRegister(req: Request, res: Response) {
 
 export async function handleLogin(req: Request, res: Response) {
   try {
-    const { error} = loginSchema.validate(req.body);
-
-    if (error) {
-      return res.status(400).json({ message: error.details[0].message });
-    }
-
     const { identifier, password } = req.body;
-    const user = await loginService(identifier, password);
+
+    const { token } = await loginService(identifier, password);
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
 
     return res.status(200).json({
       message: "Login success",
-      user,
     });
   } catch (err: any) {
     return res.status(401).json({
@@ -43,5 +44,14 @@ export async function handleLogin(req: Request, res: Response) {
   }
 }
 
+export function handleLogout(req: Request, res: Response) {
+  res.clearCookie("token", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false,
+  })
+
+  res.status(200).json({ message: "Logout success" })
+}
 
 
