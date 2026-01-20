@@ -3,9 +3,21 @@ import { useSelector } from "react-redux"
 import type { RootState } from "@/store"
 
 const ProtectedRoute = () => {
-  const isAuth = useSelector((state: RootState) => state.auth.isLoggedIn)
-  if (!isAuth) return <Navigate to="/login" replace />
+  const { isLoggedIn, authChecked } = useSelector(
+    (state: RootState) => state.auth
+  )
+
+  // ⏳ TUNGGU AUTH CHECK
+  if (!authChecked) {
+    return <div className="text-white">Loading...</div>
+  }
+
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />
+  }
+
   return <Outlet />
 }
+
 
 export default ProtectedRoute

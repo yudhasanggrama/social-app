@@ -35,7 +35,7 @@ export async function handleLogin(req: Request, res: Response) {
     });
 
     return res.status(200).json({
-      message: "Login success",
+      message: "Login success", token
     });
   } catch (err: any) {
     return res.status(401).json({

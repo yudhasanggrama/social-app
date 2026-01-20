@@ -64,7 +64,7 @@ export function Login() {
                         value={form.identifier}
                         onChange={handleChange}
                         required
-                        autoComplete="username"
+                        autoComplete="identifier"
                         />
 
                     </div>

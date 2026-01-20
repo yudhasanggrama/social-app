@@ -1,44 +1,42 @@
+import { Routes, Route } from "react-router-dom"
+import { useEffect } from "react"
+import { useDispatch } from "react-redux"
+import type { AppDispatch } from "./store"
+import { login } from "./store"
+import api from "./lib/api"
 
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { Login } from './pages/Login'
-import Register from './pages/Register'
-import ProtectedRoute from './components/ProtectedRoute';
-import LogoutButton from './components/LogoutButton';
-import { Provider } from 'react-redux';
-import { store } from './store';
+import {Login} from "./pages/Login"
+import Register from "./pages/Register"
+import ProtectedRoute from "./components/ProtectedRoute"
+import { setAuthChecked } from "./store"
+import Home from "./pages/Home"
 
-export const Header = () => (
-  <>
-    <nav className="flex justify-between p-4">
-        <h1>Circle</h1>
-        <LogoutButton />
-    </nav>
-    <div className="text-center mt-5">
-      <h1>Hello World</h1>
-    </div>
-  </>
-);
 
 function App() {
+  const dispatch = useDispatch<AppDispatch>()
+
+
+ useEffect(() => {
+  api.get("/me")
+    .then(res => {
+      dispatch(login({ name: res.data.user.username }))
+    })
+    .catch(() => {
+      dispatch(setAuthChecked())
+    })
+}, [dispatch])
 
   return (
-    <>
-      <Provider store={store}>
-      <BrowserRouter>
-        <Routes>
-          {/* guest routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-          
+    <Routes>
+      {/* guest */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
 
-          {/* protected routes */}
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<Header />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </Provider>
-    </>
+      {/* protected */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/" element={<Home />} />
+      </Route>
+    </Routes>
   )
 }
 
