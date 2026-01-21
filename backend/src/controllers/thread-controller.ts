@@ -1,18 +1,25 @@
 import { Request, Response } from "express";
 import { createThread, getThreadsFormatted } from "../services/thread";
 import { AuthRequest } from "../middleware/authMiddleware";
+import { io } from "../app";
 
 
 export const create = async (req: AuthRequest, res: Response) => {
-  const { content } = req.body 
-  const file = req.file; 
+  try {
+    const { content } = req.body;
+    const file = req.file;
 
-  const image = file ? `/uploads/${file.filename}` : null;
+    const image = file ? `/uploads/${file.filename}` : null;
 
+    const thread = await createThread(req.user!.id, content, image);
+    
+    res.status(201).json({ thread });
 
-  const thread = await createThread(req.user!.id, content, image);
-  return res.status(201).json({ thread });
-}
+    io.emit("thread:created", thread);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to create thread" });
+  }
+};
 
 export const findAll = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id; 

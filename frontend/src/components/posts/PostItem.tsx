@@ -3,6 +3,7 @@ import { Heart, MessageCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Thread } from "@/Types/thread";
 import api from "@/lib/api";
+import { socket } from "@/lib/socket";
 
 const PostItem = () => {
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -20,14 +21,44 @@ const PostItem = () => {
     }
   };
 
-    useEffect(() => {
-      fetchThreads();
+useEffect(() => {
+  fetchThreads();
 
-      const onCreated = () => fetchThreads();
-      window.addEventListener("thread:created", onCreated);
+  const onCreated = (thread: Thread) => {
+    setThreads((prev) => (prev.some((t) => t.id === thread.id) ? prev : [thread, ...prev]));
+  };
 
-      return () => window.removeEventListener("thread:created", onCreated);
-    }, []);
+  const onLikeUpdated = (p: {
+    threadId: number;
+    likesCount: number;
+    actorUserId: number;
+    liked: boolean;
+  }) => {
+    console.log("[client] received like_updated:", p);
+    if (!p || typeof p.threadId !== "number" || typeof p.likesCount !== "number") {
+    console.warn("[client] invalid like_updated payload:", p);
+    return;
+  }
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === p.threadId
+          ? {
+              ...t,
+              likes: p.likesCount,
+            }
+          : t
+      )
+    );
+  };
+
+  socket.on("thread:created", onCreated);
+  socket.on("thread:like_updated", onLikeUpdated);
+
+  return () => {
+    socket.off("thread:created", onCreated);
+    socket.off("thread:like_updated", onLikeUpdated);
+  };
+}, []);
 
 
   const toggleLike = async (threadId: number) => {
@@ -52,28 +83,15 @@ const PostItem = () => {
     try {
       const res = await api.post("/likes/toggle", { thread_id: threadId });
 
-      const likedFromServer: boolean | undefined =
-        typeof res.data?.liked === "boolean"
-          ? res.data.liked
-          : typeof res.data?.result?.liked === "boolean"
-          ? res.data.result.liked
-          : undefined;
+      const likedFromServer: boolean | undefined = res.data?.result?.liked;
 
       if (typeof likedFromServer === "boolean") {
         setThreads((prev) =>
-          prev.map((t) => {
-            if (t.id !== threadId) return t;
-
-            if (t.isLiked !== likedFromServer) {
-              return {
-                ...t,
-                isLiked: likedFromServer,
-                likes: t.likes + (likedFromServer ? 1 : -1),
-              };
-            }
-
-            return t;
-          })
+          prev.map((t) =>
+            t.id === threadId
+              ? { ...t, isLiked: likedFromServer }
+              : t
+          )
         );
       } else {
         await fetchThreads();
@@ -97,21 +115,21 @@ const PostItem = () => {
         >
           <Avatar>
             <AvatarImage
-              src={thread.user.profile_picture ?? "https://github.com/shadcn.png"}
+              src={thread.user?.profile_picture ?? "https://github.com/shadcn.png"}
             />
             <AvatarFallback>
-              {(thread.user.name?.[0] ?? "U").toUpperCase()}
+              {(thread.user?.name?.[0] ?? "U").toUpperCase()}
             </AvatarFallback>
           </Avatar>
 
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-1 text-sm">
               <span className="font-semibold text-zinc-100">
-                {thread.user.name}
+                {thread.user?.name ?? "Unknown"}
               </span>
               <span className="text-zinc-400">
-                @{thread.user.username} ·{" "}
-                {new Date(thread.created_at).toLocaleString()}
+                @{thread.user?.username ?? "unknown"} ·{" "}
+              {new Date(thread.created_at).toLocaleString()}
               </span>
             </div>
 
@@ -120,7 +138,7 @@ const PostItem = () => {
             </p>
 
             {thread.image && (
-             <img
+              <img
                   src={`http://localhost:9000${thread.image}`}
                   alt="thread"
                   className=" mt-3 w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto rounded-lg object-cover max-h-64 sm:max-h-80 md:max-h-96"

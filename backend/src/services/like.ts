@@ -1,4 +1,4 @@
-import {prisma} from "../prisma/client";
+import { prisma } from "../prisma/client";
 
 export const toggleLike = async (userId: number, threadId: number) => {
   const existing = await prisma.like.findUnique({
@@ -10,15 +10,21 @@ export const toggleLike = async (userId: number, threadId: number) => {
     },
   });
 
+  let liked: boolean;
+
   if (existing) {
     await prisma.like.delete({ where: { id: existing.id } });
-    return { liked: false };
+    liked = false;
+  } else {
+    await prisma.like.create({
+      data: { user_id: userId, thread_id: threadId },
+    });
+    liked = true;
   }
 
-  await prisma.like.create({
-    data: { user_id: userId, thread_id: threadId },
+  const likesCount = await prisma.like.count({
+    where: { thread_id: threadId },
   });
 
-  return { liked: true };
+  return { liked, likesCount, threadId };
 };
-
