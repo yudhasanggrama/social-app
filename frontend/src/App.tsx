@@ -10,6 +10,7 @@ import Register from "./pages/Register"
 import ProtectedRoute from "./components/ProtectedRoute"
 import { setAuthChecked } from "./store"
 import Home from "./pages/Home"
+import GuestRoute from "./components/GuestRoute"
 
 
 function App() {
@@ -28,9 +29,11 @@ function App() {
 
   return (
     <Routes>
-      {/* guest */}
+        {/* guest */}
+    <Route element={<GuestRoute />}>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+    </Route>
 
       {/* protected */}
       <Route element={<ProtectedRoute />}>

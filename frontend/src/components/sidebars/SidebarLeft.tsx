@@ -5,8 +5,30 @@ import { useDispatch } from "react-redux"
 import { useNavigate } from "react-router-dom"
 import api from "@/lib/api"
 import { logout } from "@/store"
+import { useEffect, useState } from "react"
+import type { MeUser } from "./SidebarRight"
 
 const SidebarLeft = () => {
+
+      const [me, setMe] = useState<MeUser | null>(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        const fetchMe = async () => {
+          try {
+            const res = await api.get("/me");
+            setMe(res.data.user);
+          } catch {
+            setMe(null);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        fetchMe();
+      }, []);
+
+
 
     const dispatch = useDispatch()
     const navigate = useNavigate()
@@ -20,7 +42,6 @@ const SidebarLeft = () => {
             alert("Logout gagal")
             }
         }
-
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-zinc-950">
@@ -42,8 +63,8 @@ const SidebarLeft = () => {
             </Avatar>
 
             <div className="text-sm">
-              <p className="font-medium">username</p>
-              <p className="text-zinc-400">@username</p>
+              <p className="font-medium">{me?.full_name}</p>
+              <p className="text-zinc-400">{me?.username}</p>
             </div>
           </div>
 

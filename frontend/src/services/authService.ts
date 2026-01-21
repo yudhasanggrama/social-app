@@ -10,3 +10,4 @@ export const loginUser = async (payload: LoginForm) : Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>("/login", payload);
     return response.data;
 };
+

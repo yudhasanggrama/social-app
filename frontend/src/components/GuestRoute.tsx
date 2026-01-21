@@ -2,7 +2,7 @@ import { Navigate, Outlet } from "react-router-dom"
 import { useSelector } from "react-redux"
 import type { RootState } from "@/store"
 
-const ProtectedRoute = () => {
+const GuestRoute = () => {
   const { isLoggedIn, authChecked } = useSelector(
     (state: RootState) => state.auth
   )
@@ -11,12 +11,11 @@ const ProtectedRoute = () => {
     return <div className="text-white">Loading...</div>
   }
 
-  if (!isLoggedIn) {
-    return <Navigate to="/login" replace />
+  if (isLoggedIn) {
+    return <Navigate to="/" replace />
   }
 
   return <Outlet />
 }
 
-
-export default ProtectedRoute
+export default GuestRoute

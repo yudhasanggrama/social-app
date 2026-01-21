@@ -9,7 +9,7 @@ export default function Home() {
 
       <div className="ml-64 flex flex-1">
         <main className="flex-1 border-x border-zinc-800">
-        <Thread />
+          <Thread />
         </main>
 
         <aside className="hidden w-[380px] border-l border-zinc-800 lg:block">

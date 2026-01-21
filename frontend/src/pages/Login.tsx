@@ -34,7 +34,8 @@ export function Login() {
         try {
         await api.post("/login", form)
         dispatch(login({ name: form.identifier }))
-        navigate("/", { replace: true }) // replace supaya back button aman
+        
+        navigate("/", { replace: true })
         } catch {
         alert("Login gagal")
         }

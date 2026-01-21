@@ -1,71 +1,92 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Heart, MessageCircle } from "lucide-react"
-import { useState } from "react"
-
-type PostThread = {
-  id: number
-  username: string
-  handle: string
-  time: string
-  content: string
-  replyCount: number
-  likeCount: number
-  isLiked: boolean
-}
-
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Heart, MessageCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { Thread } from "@/Types/thread";
+import api from "@/lib/api";
 
 const PostItem = () => {
-  const [threads, setThreads] = useState<PostThread[]>([
-    {
-    id: 1,
-    username: "Indah Pra Karya",
-    handle: "@indahpra",
-    time: "4h",
-    content:
-      "Kalian pernah ga sih bet on saving? Jadi by calculation sebenernya kita ga survive sampe tanggal tertentu...",
-    replyCount: 381,
-    likeCount: 36,
-    isLiked: true,
-  },
-    {
-      id: 2,
-      username: "Anin Syahputri",
-      handle: "@aninsyah",
-      time: "5h",
-      content:
-        "Lorem ipsum dolor sit amet consectetur adipisicing elit. Optio aliquid mollitia.",
-      replyCount: 50,
-      likeCount: 460,
-      isLiked: true
-    },
-    {
-      id: 3,
-      username: "Kina Maulina",
-      handle: "@aninsyah",
-      time: "3h",
-      content: "Lorem ipsum dolor sit amet.",
-      replyCount: 50,
-      likeCount: 36,
-      isLiked: true
-    },
-  ])
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<Record<number, boolean>>({}); // anti spam click
 
-  const toggleLike = (id: number) => {
-  setThreads((prev) =>
-    prev.map((thread) =>
-      thread.id === id
-        ? {
-            ...thread,
-            isLiked: !thread.isLiked,
-            likeCount: thread.isLiked
-              ? thread.likeCount - 1
-              : thread.likeCount + 1,
-          }
-        : thread
-    )
-  )
-}
+  const fetchThreads = async () => {
+    try {
+      const res = await api.get("/threads");
+      setThreads(res.data.data.threads);
+    } catch (e) {
+      console.error("Failed to fetch threads", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+    useEffect(() => {
+      fetchThreads();
+
+      const onCreated = () => fetchThreads();
+      window.addEventListener("thread:created", onCreated);
+
+      return () => window.removeEventListener("thread:created", onCreated);
+    }, []);
+
+
+  const toggleLike = async (threadId: number) => {
+    if (toggling[threadId]) return;
+
+    const prevThreads = threads;
+
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === threadId
+          ? {
+              ...t,
+              isLiked: !t.isLiked,
+              likes: t.isLiked ? t.likes - 1 : t.likes + 1,
+            }
+          : t
+      )
+    );
+
+    setToggling((p) => ({ ...p, [threadId]: true }));
+
+    try {
+      const res = await api.post("/likes/toggle", { thread_id: threadId });
+
+      const likedFromServer: boolean | undefined =
+        typeof res.data?.liked === "boolean"
+          ? res.data.liked
+          : typeof res.data?.result?.liked === "boolean"
+          ? res.data.result.liked
+          : undefined;
+
+      if (typeof likedFromServer === "boolean") {
+        setThreads((prev) =>
+          prev.map((t) => {
+            if (t.id !== threadId) return t;
+
+            if (t.isLiked !== likedFromServer) {
+              return {
+                ...t,
+                isLiked: likedFromServer,
+                likes: t.likes + (likedFromServer ? 1 : -1),
+              };
+            }
+
+            return t;
+          })
+        );
+      } else {
+        await fetchThreads();
+      }
+    } catch (e) {
+      console.error("Toggle like failed", e);
+      setThreads(prevThreads);
+    } finally {
+      setToggling((p) => ({ ...p, [threadId]: false }));
+    }
+  };
+
+  if (loading) return <div>Loading...</div>;
 
   return (
     <>
@@ -75,17 +96,22 @@ const PostItem = () => {
           className="flex gap-4 px-4 py-4 border-b border-zinc-800 hover:bg-zinc-900/50"
         >
           <Avatar>
-            <AvatarImage src="https://github.com/shadcn.png" />
-            <AvatarFallback>I</AvatarFallback>
+            <AvatarImage
+              src={thread.user.profile_picture ?? "https://github.com/shadcn.png"}
+            />
+            <AvatarFallback>
+              {(thread.user.name?.[0] ?? "U").toUpperCase()}
+            </AvatarFallback>
           </Avatar>
-          
+
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-1 text-sm">
               <span className="font-semibold text-zinc-100">
-                {thread.username}
+                {thread.user.name}
               </span>
               <span className="text-zinc-400">
-                {thread.handle} · {thread.time}
+                @{thread.user.username} ·{" "}
+                {new Date(thread.created_at).toLocaleString()}
               </span>
             </div>
 
@@ -93,30 +119,39 @@ const PostItem = () => {
               {thread.content}
             </p>
 
+            {thread.image && (
+             <img
+                  src={`http://localhost:9000${thread.image}`}
+                  alt="thread"
+                  className=" mt-3 w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto rounded-lg object-cover max-h-64 sm:max-h-80 md:max-h-96"
+                />
+            )}
+
             <div className="mt-3 flex items-center gap-8 text-zinc-400 text-sm">
               <button className="flex items-center gap-1 hover:text-zinc-200">
                 <MessageCircle className="h-4 w-4" />
-                <span>{thread.replyCount}</span>
+                <span>{thread.reply}</span>
               </button>
 
               <button
                 onClick={() => toggleLike(thread.id)}
+                disabled={!!toggling[thread.id]}
                 className={`flex items-center gap-1 ${
                   thread.isLiked ? "text-red-500" : "hover:text-zinc-200"
-                }`}
+                } ${toggling[thread.id] ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 <Heart
                   className="h-4 w-4"
                   fill={thread.isLiked ? "currentColor" : "none"}
                 />
-                <span>{thread.likeCount}</span>
+                <span>{thread.likes}</span>
               </button>
             </div>
           </div>
         </div>
       ))}
     </>
-  )
-}
+  );
+};
 
-export default PostItem
+export default PostItem;

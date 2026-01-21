@@ -11,6 +11,8 @@ const menuItems = [
 
 export function SidebarNav() {
   return (
+    <>
+    
     <nav className="space-y-1">
       {menuItems.map((item) => (
         <NavLink
@@ -35,5 +37,6 @@ export function SidebarNav() {
         Create Post
       </Button>
     </nav>
+    </>
   )
 }

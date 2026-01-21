@@ -11,13 +11,14 @@ export const toggleLike = async (userId: number, threadId: number) => {
   });
 
   if (existing) {
-    return prisma.like.delete({ where: { id: existing.id } });
+    await prisma.like.delete({ where: { id: existing.id } });
+    return { liked: false };
   }
 
-  return prisma.like.create({
-    data: {
-      user_id: userId,
-      thread_id: threadId,
-    },
+  await prisma.like.create({
+    data: { user_id: userId, thread_id: threadId },
   });
+
+  return { liked: true };
 };
+

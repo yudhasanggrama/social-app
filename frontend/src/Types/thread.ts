@@ -1,0 +1,22 @@
+export interface ThreadUser {
+  id: number;
+  username: string;
+  name: string;
+  profile_picture: string | null;
+}
+
+export interface Thread {
+  id: number;
+  content: string;
+  created_at: string;
+  image?: string | null;
+  user: ThreadUser;
+  likes: number;
+  reply: number;
+  isLiked: boolean;
+}
+
+export type CreateThreadPayload = {
+  content: string;
+  image?: string | null;
+};
