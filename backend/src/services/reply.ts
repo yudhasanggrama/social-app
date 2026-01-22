@@ -76,8 +76,7 @@ export const createReply = async (
 };
 
 
-export const getRepliesByThreadId = async (threadId: number) => {
-
+export const getRepliesByThreadId = async (threadId: number, userId?: number) => {
   const replies = await prisma.reply.findMany({
     where: { thread_id: threadId },
     orderBy: { created_at: "asc" },
@@ -85,6 +84,8 @@ export const getRepliesByThreadId = async (threadId: number) => {
       id: true,
       content: true,
       created_at: true,
+
+      // ✅ sesuai schema: users
       users: {
         select: {
           id: true,
@@ -93,6 +94,21 @@ export const getRepliesByThreadId = async (threadId: number) => {
           photo_profile: true,
         },
       },
+
+      // ✅ sesuai schema: replyLikes (untuk count)
+      _count: {
+        select: {
+          replyLikes: true,
+        },
+      },
+
+      // ✅ sesuai schema: replyLikes (untuk isLiked)
+      replyLikes: userId
+        ? {
+            where: { user_id: userId },
+            select: { id: true },
+          }
+        : false,
     },
   });
 
@@ -107,7 +123,57 @@ export const getRepliesByThreadId = async (threadId: number) => {
         name: r.users.full_name,
         profile_picture: r.users.photo_profile,
       },
+      likes: r._count.replyLikes,
+      isLiked: userId ? (Array.isArray(r.replyLikes) && r.replyLikes.length > 0) : false,
     })),
+  };
+};
+
+
+
+
+export const toggleReplyLike = async (replyId: number, userId: number) => {
+  // ambil thread_id untuk payload socket
+  const reply = await prisma.reply.findUnique({
+    where: { id: replyId },
+    select: { id: true, thread_id: true },
+  });
+
+  if (!reply) {
+    throw new Error("Reply not found");
+  }
+
+  const existing = await prisma.replyLike.findUnique({
+    where: {
+      user_id_reply_id: {
+        user_id: userId,
+        reply_id: replyId,
+      },
+    },
+    select: { id: true },
+  });
+
+  let liked: boolean;
+
+  if (existing) {
+    await prisma.replyLike.delete({ where: { id: existing.id } });
+    liked = false;
+  } else {
+    await prisma.replyLike.create({
+      data: { reply_id: replyId, user_id: userId },
+    });
+    liked = true;
+  }
+
+  const likesCount = await prisma.replyLike.count({
+    where: { reply_id: replyId },
+  });
+
+  return {
+    replyId,
+    threadId: reply.thread_id,
+    likesCount,
+    liked,
   };
 };
 

@@ -1,6 +1,8 @@
 import { Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { createReply, getRepliesByThreadId } from "../services/reply";
+import { toggleReplyLike } from "../services/reply";
+import { io } from "../app";
 
 
 export const create = async (req: AuthRequest, res: Response) => {
@@ -13,24 +15,16 @@ export const create = async (req: AuthRequest, res: Response) => {
 export const findByThreadId = async (req: AuthRequest, res: Response) => {
   try {
     const threadId = Number(req.params.id);
+    const userId = req.user?.id;
 
     if (Number.isNaN(threadId)) {
-      return res.status(400).json({
-        code: 400,
-        status: "error",
-        message: "Invalid thread id",
-      });
+      return res.status(400).json({ code: 400, status: "error", message: "Invalid thread id" });
     }
 
-    const data = await getRepliesByThreadId(threadId);
+    const data = await getRepliesByThreadId(threadId, userId);
 
-    // kalau service kamu return null saat thread ga ada:
     if (!data) {
-      return res.status(404).json({
-        code: 404,
-        status: "error",
-        message: "Thread not found",
-      });
+      return res.status(404).json({ code: 404, status: "error", message: "Thread not found" });
     }
 
     return res.status(200).json({
@@ -40,12 +34,43 @@ export const findByThreadId = async (req: AuthRequest, res: Response) => {
       data,
     });
   } catch (err) {
-    console.error("[findByThreadId] error:", err);
-    return res.status(500).json({
-      code: 500,
-      status: "error",
-      message: "Internal server error",
+    return res.status(500).json({ code: 500, status: "error", message: "Internal server error" });
+  }
+};
+
+
+
+
+export const toggleLike = async (req: AuthRequest, res: Response) => {
+  try {
+    const replyId = Number(req.body.reply_id);
+    const userId = req.user?.id;
+
+    if (!userId || Number.isNaN(replyId)) {
+      return res.status(400).json({ code: 400, status: "error", message: "Invalid request" });
+    }
+
+    const result = await toggleReplyLike(replyId, userId);
+    // result: { replyId, threadId, likesCount, liked }
+
+    // ✅ broadcast ke semua client (atau bisa ke room thread)
+    io.emit("reply:like_updated", {
+      replyId: result.replyId,
+      threadId: result.threadId,
+      likesCount: result.likesCount,
+      actorUserId: userId,
+      liked: result.liked,
     });
+
+    return res.status(200).json({
+      code: 200,
+      status: "success",
+      message: "Toggle Reply Like Successfully",
+      data: result,
+    });
+  } catch (err) {
+    console.error("[toggleReplyLike] error:", err);
+    return res.status(500).json({ code: 500, status: "error", message: "Internal server error" });
   }
 };
 

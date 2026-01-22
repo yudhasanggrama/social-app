@@ -25,6 +25,7 @@ model User {
   
   replies       Reply[]
   likes         Like[]
+  replyLikes ReplyLike[]
   following     Following[] @relation("UserFollowing")
   followers     Following[] @relation("UserFollowers")
 
@@ -57,7 +58,8 @@ model Reply {
 
   user_id    Int 
   thread_id  Int 
-
+  
+  replyLikes ReplyLike[]
   users      User   @relation(fields: [user_id], references: [id])
   threads    Thread @relation(fields: [thread_id], references: [id])
 }
@@ -84,4 +86,16 @@ model Following {
   following    User @relation("UserFollowing", fields: [following_id], references: [id])
 
   @@unique([follower_id, following_id])
+}
+
+model ReplyLike {
+  id        Int      @id @default(autoincrement())
+  user_id   Int
+  reply_id  Int
+  created_at DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [id])
+  reply Reply @relation(fields: [reply_id], references: [id])
+
+  @@unique([user_id, reply_id])
 }

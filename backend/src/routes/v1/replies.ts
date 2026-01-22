@@ -8,6 +8,7 @@ router.use(authMiddleware);
 
 router.post("/replies", ReplyController.create);
 router.get("/threads/:id/replies", ReplyController.findByThreadId);
+router.post("/reply-likes/toggle", ReplyController.toggleLike);
 
 
 export default router;

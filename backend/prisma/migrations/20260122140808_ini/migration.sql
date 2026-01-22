@@ -62,6 +62,16 @@ CREATE TABLE "Following" (
     CONSTRAINT "Following_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "ReplyLike" (
+    "id" SERIAL NOT NULL,
+    "user_id" INTEGER NOT NULL,
+    "reply_id" INTEGER NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ReplyLike_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
 
@@ -73,6 +83,9 @@ CREATE UNIQUE INDEX "Like_user_id_thread_id_key" ON "Like"("user_id", "thread_id
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Following_follower_id_following_id_key" ON "Following"("follower_id", "following_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ReplyLike_user_id_reply_id_key" ON "ReplyLike"("user_id", "reply_id");
 
 -- AddForeignKey
 ALTER TABLE "Thread" ADD CONSTRAINT "Thread_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -97,3 +110,9 @@ ALTER TABLE "Following" ADD CONSTRAINT "Following_follower_id_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "Following" ADD CONSTRAINT "Following_following_id_fkey" FOREIGN KEY ("following_id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ReplyLike" ADD CONSTRAINT "ReplyLike_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ReplyLike" ADD CONSTRAINT "ReplyLike_reply_id_fkey" FOREIGN KEY ("reply_id") REFERENCES "Reply"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

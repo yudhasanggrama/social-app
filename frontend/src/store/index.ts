@@ -2,12 +2,14 @@ import { configureStore, createSlice, type PayloadAction } from "@reduxjs/toolki
 
 // ===== Auth Slice =====
 interface AuthState {
+  id: number | null;
   name: string
   isLoggedIn: boolean
   authChecked: boolean,
 }
 
 const initialState: AuthState = {
+  id: null,
   name: "",
   isLoggedIn: false,
    authChecked: false,
@@ -17,16 +19,17 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    login: (state, action: PayloadAction<{ name: string }>) => {
-      state.name = action.payload.name
-      state.isLoggedIn = true,
-      state.isLoggedIn = true
-      state.authChecked = true
+    login: (state, action: PayloadAction<{ id: number; name: string }>) => {
+      state.id = action.payload.id;
+      state.name = action.payload.name;
+      state.isLoggedIn = true;
+      state.authChecked = true;
     },
-     logout: (state) => {
-      state.name = ""
-      state.isLoggedIn = false
-      state.authChecked = true
+    logout: (state) => {
+      state.id = null;
+      state.name = "";
+      state.isLoggedIn = false;
+      state.authChecked = true;
     },
     setAuthChecked: (state) => {
       state.authChecked = true

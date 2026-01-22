@@ -1,25 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Thread } from "@/Types/thread";
-import type { Reply } from "@/Types/reply";
+import type { ReplyItem } from "@/Types/reply";
 import api from "@/lib/api";
-
 import SidebarLeft from "@/components/sidebars/SidebarLeft";
 import SidebarRight from "@/components/sidebars/SidebarRight";
-
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ImagePlus, Heart, MessageCircle } from "lucide-react";
+import { socket } from "@/lib/socket";
+import { useSelector } from "react-redux";
+import type { RootState } from "@/store";
+
 
 export default function ThreadDetailPage() {
   const { id } = useParams();
   const threadId = Number(id);
+  const myUserId = useSelector((s: RootState) => s.auth.id);
 
   const [thread, setThread] = useState<Thread | null>(null);
-  const [replies, setReplies] = useState<Reply[]>([]);
+  const [replies, setReplies] = useState<ReplyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState("");
   const [replyLoading, setReplyLoading] = useState(false)
+  const [likeLoading, setLikeLoading] = useState(false);
+  
 
   useEffect(() => {
     if (!threadId) return;
@@ -36,7 +41,7 @@ export default function ThreadDetailPage() {
         ]);
 
         setThread(tRes.data.data as Thread);
-        setReplies((rRes.data.data?.replies ?? []) as Reply[]);
+        setReplies((rRes.data.data?.replies ?? []) as ReplyItem[]);
       } catch (e: any) {
         if (e?.name === "CanceledError" || e?.name === "AbortError") return;
         console.error("Failed to fetch detail thread", e);
@@ -66,7 +71,7 @@ export default function ThreadDetailPage() {
         { withCredentials: true }
         );
 
-        const newReply = res.data.reply as Reply;
+        const newReply = res.data.reply as ReplyItem;
         setReplies((prev) => [newReply, ...prev]);
         setReplyText("");
     } catch (error) {
@@ -75,6 +80,137 @@ export default function ThreadDetailPage() {
         setReplyLoading(false);
     }
   }
+
+  const toggleThreadLike = async () => {
+  if (!thread || likeLoading) return;
+
+  const prevThread = thread;
+
+  // optimistic update
+  setThread({
+    ...thread,
+    isLiked: !thread.isLiked,
+    likes: thread.isLiked ? thread.likes - 1 : thread.likes + 1,
+  });
+
+  setLikeLoading(true);
+
+  try {
+    const res = await api.post(
+      "/likes/toggle",
+      { thread_id: thread.id },
+      { withCredentials: true }
+    );
+
+    const { liked, likesCount } = res.data.result;
+
+    setThread((t) =>
+      t
+        ? {
+            ...t,
+            isLiked: liked,
+            likes: likesCount,
+          }
+        : t
+    );
+  } catch (e) {
+    console.error("Toggle like failed", e);
+    // rollback kalau error
+    setThread(prevThread);
+  } finally {
+    setLikeLoading(false);
+  }
+};
+
+useEffect(() => {
+  if (!thread) return;
+
+  const onThreadLikeUpdated = (p: {
+    threadId: number;
+    likesCount: number;
+    actorUserId: number;
+    liked: boolean;
+  }) => {
+    if (p.threadId !== thread.id) return;
+
+    setThread((prev) =>
+      prev
+        ? {
+            ...prev,
+            likes: p.likesCount,
+            isLiked: p.actorUserId === myUserId ? p.liked : prev.isLiked,
+          }
+        : prev
+    );
+  };
+
+  const onReplyLikeUpdated = (p: {
+    replyId: number;
+    threadId: number;
+    likesCount: number;
+    actorUserId: number;
+    liked: boolean;
+  }) => {
+    if (p.threadId !== thread.id) return;
+
+    setReplies((prev) =>
+      prev.map((r) =>
+        r.id === p.replyId
+          ? {
+              ...r,
+              likes: p.likesCount,
+              isLiked: p.actorUserId === myUserId ? p.liked : r.isLiked,
+            }
+          : r
+      )
+    );
+  };
+
+  socket.on("thread:like_updated", onThreadLikeUpdated);
+  socket.on("reply:like_updated", onReplyLikeUpdated);
+
+  return () => {
+    socket.off("thread:like_updated", onThreadLikeUpdated);
+    socket.off("reply:like_updated", onReplyLikeUpdated);
+  };
+}, [thread?.id, myUserId]); 
+
+
+const toggleReplyLike = async (replyId: number) => {
+  // optimistic update
+  setReplies((prev) =>
+    prev.map((r) =>
+      r.id === replyId
+        ? {
+            ...r,
+            isLiked: !r.isLiked,
+            likes: r.isLiked ? r.likes - 1 : r.likes + 1,
+          }
+        : r
+    )
+  );
+
+  try {
+    const res = await api.post("/reply-likes/toggle", { reply_id: replyId });
+
+    const likedFromServer: boolean | undefined = res.data?.data?.liked;
+    const likesCountFromServer: number | undefined = res.data?.data?.likesCount;
+
+    if (typeof likedFromServer === "boolean" && typeof likesCountFromServer === "number") {
+      setReplies((prev) =>
+        prev.map((r) =>
+          r.id === replyId ? { ...r, isLiked: likedFromServer, likes: likesCountFromServer } : r
+        )
+      );
+    }
+  } catch (e) {
+    console.error("Toggle reply like failed", e);
+    const rRes = await api.get(`/threads/${threadId}/replies`);
+    setReplies(rRes.data.data.replies ?? []);
+  }
+};
+
+
 
 
 
@@ -155,17 +291,29 @@ export default function ThreadDetailPage() {
                   {/* ganti sesuai field created_at kamu */}
                   {/* {new Date(thread.created_at).toLocaleString()} */}
                 </div>
+                  <div className="mt-3 flex items-center gap-6 text-zinc-500">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleThreadLike();
+                      }}
+                      disabled={likeLoading}
+                      className={`flex items-center gap-2 ${
+                        thread.isLiked ? "text-red-500" : "hover:text-zinc-300"
+                      } ${likeLoading ? "opacity-60 cursor-not-allowed" : ""}`}
+                    >
+                      <Heart
+                        className="h-4 w-4"
+                        fill={thread.isLiked ? "currentColor" : "none"}
+                      />
+                      <span className="text-xs">{thread.likes}</span>
+                    </button>
 
-                <div className="mt-3 flex items-center gap-6 text-zinc-500">
-                  <button className="flex items-center gap-2 hover:text-zinc-300">
-                    <Heart className="h-4 w-4" />
-                    <span className="text-xs">0</span>
-                  </button>
-                  <button className="flex items-center gap-2 hover:text-zinc-300">
-                    <MessageCircle className="h-4 w-4" />
-                    <span className="text-xs">{replies.length}</span>
-                  </button>
-                </div>
+                    <button className="flex items-center gap-2 hover:text-zinc-300">
+                      <MessageCircle className="h-4 w-4" />
+                      <span className="text-xs">{replies.length}</span>
+                    </button>
+                  </div>
               </div>
             </div>
           </section>
@@ -242,13 +390,17 @@ export default function ThreadDetailPage() {
                       </p>
 
                       <div className="mt-2 flex items-center gap-6 text-zinc-500">
-                        <button className="flex items-center gap-2 hover:text-zinc-300">
-                          <Heart className="h-4 w-4" />
-                          <span className="text-xs">0</span>
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-zinc-300">
-                          <MessageCircle className="h-4 w-4" />
-                          <span className="text-xs">0</span>
+                        <button
+                          onClick={() => toggleReplyLike(r.id)}
+                          className={`flex items-center gap-1 text-sm ${
+                            r.isLiked ? "text-red-500" : "text-zinc-400 hover:text-zinc-200"
+                          }`}
+                        >
+                          <Heart
+                            className="h-4 w-4"
+                            fill={r.isLiked ? "currentColor" : "none"}
+                          />
+                          <span>{r.likes}</span>
                         </button>
                       </div>
                     </div>
