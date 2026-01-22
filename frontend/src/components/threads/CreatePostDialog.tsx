@@ -1,3 +1,4 @@
+// CreatePostDialog.tsx
 import {
   DialogContent,
   DialogHeader,
@@ -8,6 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ImagePlus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useFlashMessage } from "@/hooks/useFlashMessage";
+import api from "@/lib/api";
 
 type QueueItem = {
   id: string;
@@ -15,10 +18,11 @@ type QueueItem = {
   text: string;
 };
 
-const CreatePostDialog = ({ onClose }: { onClose: () => void }) => {
+const CreatePostDialog = ({ onClose }: { onClose: () => Promise<void> }) => {
   const [content, setContent] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
+  const { show } = useFlashMessage();
 
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const pushMsg = (type: QueueItem["type"], text: string) => {
@@ -29,54 +33,48 @@ const CreatePostDialog = ({ onClose }: { onClose: () => void }) => {
     }, 3500);
   };
 
-  const previewUrl = useMemo(() => {
-    if (!imageFile) return null;
-    return URL.createObjectURL(imageFile);
-  }, [imageFile]);
+  const previewUrls = useMemo(() => {
+    return imageFiles.map((f) => URL.createObjectURL(f));
+  }, [imageFiles]);
 
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [previewUrl]);
+  }, [previewUrls]);
 
-  const removeImage = () => {
-    setImageFile(null);
+  const removeImage = (index: number) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
     pushMsg("info", "Image removed.");
   };
 
   const handleSubmit = async () => {
-    if (!content.trim()) return;
+    // kalau mau wajib text, balikin ke: if (!content.trim()) return;
+    if (!content.trim() && imageFiles.length === 0) return;
 
     try {
       setLoading(true);
 
+      await new Promise((r) => setTimeout(r, 0));
+
       const formData = new FormData();
       formData.append("content", content);
+      imageFiles.forEach((file) => formData.append("images", file));
 
-      if (imageFile) {
-        pushMsg("info", "Uploading image...");
-        formData.append("image", imageFile);
-      } else {
-        pushMsg("info", "Posting...");
-      }
+      if (imageFiles.length > 0) {
+        pushMsg("info", `Uploading ${imageFiles.length} image(s)...`);
+      } 
 
-      const result = await fetch("http://localhost:9000/api/v1/threads", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
+      await api.post("/threads", formData, {
+        withCredentials: true,
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
-      if (!result.ok) {
-        const err = await result.json().catch(() => null);
-        throw new Error(err?.message || "Failed to create thread");
-      }
+      show("success", "Add new posting");
 
-      pushMsg("success", "Posted!");
-
+      await onClose();
       setContent("");
-      setImageFile(null);
-      onClose();
+      setImageFiles([]);
     } catch (e: any) {
       pushMsg("error", e?.message ?? "Error");
     } finally {
@@ -88,6 +86,8 @@ const CreatePostDialog = ({ onClose }: { onClose: () => void }) => {
     <DialogContent
       className="max-w-xl border-zinc-800 bg-zinc-950 text-white
       fixed top-10 left-1/2 transform -translate-x-1/2 translate-y-0"
+      onPointerDownOutside={(e) => loading && e.preventDefault()}
+      onEscapeKeyDown={(e) => loading && e.preventDefault()}
     >
       <DialogHeader>
         <VisuallyHidden>
@@ -101,8 +101,7 @@ const CreatePostDialog = ({ onClose }: { onClose: () => void }) => {
             <div
               key={m.id}
               className={`
-                flex items-center gap-2 rounded-md px-3 py-2 text-sm
-                border
+                flex items-center gap-2 rounded-md px-3 py-2 text-sm border
                 ${
                   m.type === "success"
                     ? "border-green-600/40 bg-green-600/10 text-green-400"
@@ -131,44 +130,56 @@ const CreatePostDialog = ({ onClose }: { onClose: () => void }) => {
             type="text"
             placeholder="What is happening?!"
             className="w-full bg-transparent text-lg placeholder:text-zinc-500 focus:outline-none"
+            disabled={loading}
           />
         </div>
 
-        {previewUrl && (
-          <div className="relative mt-4">
-            <img
-              src={previewUrl}
-              alt="preview"
-              className="w-full max-h-80 rounded-lg object-cover border border-zinc-800"
-            />
-
-            <button
-              type="button"
-              onClick={removeImage}
-              className="
-                absolute top-2 right-2
-                flex items-center justify-center
-                rounded-full
-                p-2
-                text-white
-              "
-              title="Remove image"
-            >
-              <X className="h-4 w-4" />
-            </button>
+        {previewUrls.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {previewUrls.map((url, idx) => (
+              <div key={url} className="relative">
+                <img
+                  src={url}
+                  alt={`preview-${idx}`}
+                  className="w-full h-40 rounded-lg object-cover border border-zinc-800"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeImage(idx)}
+                  disabled={loading}
+                  className="
+                    absolute top-2 right-2 flex items-center justify-center
+                    rounded-full p-2 text-white
+                    bg-zinc-800/90 hover:bg-zinc-700
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  "
+                  title="Remove image"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
         <div className="mt-4 flex items-center justify-between">
-          <label className="cursor-pointer rounded-full p-2 text-green-500 hover:bg-green-500/10">
+          <label
+            className={`cursor-pointer rounded-full p-2 text-green-500 hover:bg-green-500/10 ${
+              loading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
             <input
               type="file"
               hidden
+              multiple
               accept="image/*"
+              disabled={loading}
               onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                setImageFile(file);
-                if (file) pushMsg("info", `Image selected: ${file.name}`);
+                const files = Array.from(e.target.files ?? []);
+                if (files.length === 0) return;
+                setImageFiles((prev) => [...prev, ...files]);
+                pushMsg("info", `${files.length} image(s) added`);
+                e.currentTarget.value = "";
               }}
             />
             <ImagePlus className="h-5 w-5" />
@@ -177,7 +188,7 @@ const CreatePostDialog = ({ onClose }: { onClose: () => void }) => {
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={loading || !content.trim()}
+            disabled={loading || (!content.trim() && imageFiles.length === 0)}
             className="rounded-full bg-green-500 px-6"
           >
             {loading ? "Posting..." : "Post"}

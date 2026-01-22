@@ -1,14 +1,17 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, MessageCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Thread } from "@/Types/thread";
 import api from "@/lib/api";
 import { socket } from "@/lib/socket";
+import { useNavigate } from "react-router-dom";
+import ThreadImages from "@/helpers/ThreadsImageProps";
 
 const PostItem = () => {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState<Record<number, boolean>>({}); // anti spam click
+  const [toggling, setToggling] = useState<Record<number, boolean>>({});
+  const navigate = useNavigate();
 
   const fetchThreads = async () => {
     try {
@@ -21,45 +24,39 @@ const PostItem = () => {
     }
   };
 
-useEffect(() => {
-  fetchThreads();
+  useEffect(() => {
+    fetchThreads();
 
-  const onCreated = (thread: Thread) => {
-    setThreads((prev) => (prev.some((t) => t.id === thread.id) ? prev : [thread, ...prev]));
-  };
+    const onCreated = (thread: Thread) => {
+      setThreads((prev) =>
+        prev.some((t) => t.id === thread.id) ? prev : [thread, ...prev]
+      );
+    };
 
-  const onLikeUpdated = (p: {
-    threadId: number;
-    likesCount: number;
-    actorUserId: number;
-    liked: boolean;
-  }) => {
-    console.log("[client] received like_updated:", p);
-    if (!p || typeof p.threadId !== "number" || typeof p.likesCount !== "number") {
-    console.warn("[client] invalid like_updated payload:", p);
-    return;
-  }
-    setThreads((prev) =>
-      prev.map((t) =>
-        t.id === p.threadId
-          ? {
-              ...t,
-              likes: p.likesCount,
-            }
-          : t
-      )
-    );
-  };
+    const onLikeUpdated = (p: {
+      threadId: number;
+      likesCount: number;
+      actorUserId: number;
+      liked: boolean;
+    }) => {
+      if (!p || typeof p.threadId !== "number" || typeof p.likesCount !== "number") {
+        console.warn("[client] invalid like_updated payload:", p);
+        return;
+      }
 
-  socket.on("thread:created", onCreated);
-  socket.on("thread:like_updated", onLikeUpdated);
+      setThreads((prev) =>
+        prev.map((t) => (t.id === p.threadId ? { ...t, likes: p.likesCount } : t))
+      );
+    };
 
-  return () => {
-    socket.off("thread:created", onCreated);
-    socket.off("thread:like_updated", onLikeUpdated);
-  };
-}, []);
+    socket.on("thread:created", onCreated);
+    socket.on("thread:like_updated", onLikeUpdated);
 
+    return () => {
+      socket.off("thread:created", onCreated);
+      socket.off("thread:like_updated", onLikeUpdated);
+    };
+  }, []);
 
   const toggleLike = async (threadId: number) => {
     if (toggling[threadId]) return;
@@ -82,16 +79,11 @@ useEffect(() => {
 
     try {
       const res = await api.post("/likes/toggle", { thread_id: threadId });
-
       const likedFromServer: boolean | undefined = res.data?.result?.liked;
 
       if (typeof likedFromServer === "boolean") {
         setThreads((prev) =>
-          prev.map((t) =>
-            t.id === threadId
-              ? { ...t, isLiked: likedFromServer }
-              : t
-          )
+          prev.map((t) => (t.id === threadId ? { ...t, isLiked: likedFromServer } : t))
         );
       } else {
         await fetchThreads();
@@ -108,66 +100,83 @@ useEffect(() => {
 
   return (
     <>
-      {threads.map((thread) => (
-        <div
-          key={thread.id}
-          className="flex gap-4 px-4 py-4 border-b border-zinc-800 hover:bg-zinc-900/50"
-        >
-          <Avatar>
-            <AvatarImage
-              src={thread.user?.profile_picture ?? "https://github.com/shadcn.png"}
-            />
-            <AvatarFallback>
-              {(thread.user?.name?.[0] ?? "U").toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+      {threads.map((thread) => {
+        const images =
+          Array.isArray(thread.image) && thread.image.length > 0
+            ? thread.image.map((p) => `http://localhost:9000${p}`)
+            : [];
 
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-1 text-sm">
-              <span className="font-semibold text-zinc-100">
-                {thread.user?.name ?? "Unknown"}
-              </span>
-              <span className="text-zinc-400">
-                @{thread.user?.username ?? "unknown"} ·{" "}
-              {new Date(thread.created_at).toLocaleString()}
-              </span>
-            </div>
+        return (
+          <div
+            key={thread.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate(`/thread/${thread.id}`)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") navigate(`/thread/${thread.id}`);
+            }}
+            className="flex gap-4 px-4 py-4 border-b border-zinc-800 hover:bg-zinc-900/50"
+          >
+            <Avatar>
+              <AvatarImage
+                src={thread.user?.profile_picture ?? "https://github.com/shadcn.png"}
+              />
+              <AvatarFallback>
+                {(thread.user?.name?.[0] ?? "U").toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
 
-            <p className="mt-1 text-sm text-zinc-200 leading-relaxed">
-              {thread.content}
-            </p>
+            <div className="flex-1">
+              <div className="flex flex-wrap items-center gap-1 text-sm">
+                <span className="font-semibold text-zinc-100">
+                  {thread.user?.name ?? "Unknown"}
+                </span>
+                <span className="text-zinc-400">
+                  @{thread.user?.username ?? "unknown"} ·{" "}
+                  {new Date(thread.created_at).toLocaleString()}
+                </span>
+              </div>
 
-            {thread.image && (
-              <img
-                  src={`http://localhost:9000${thread.image}`}
-                  alt="thread"
-                  className=" mt-3 w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto rounded-lg object-cover max-h-64 sm:max-h-80 md:max-h-96"
-                />
-            )}
+              <p className="mt-1 text-sm text-zinc-200 leading-relaxed">
+                {thread.content}
+              </p>
 
-            <div className="mt-3 flex items-center gap-8 text-zinc-400 text-sm">
-              <button className="flex items-center gap-1 hover:text-zinc-200">
-                <MessageCircle className="h-4 w-4" />
-                <span>{thread.reply}</span>
-              </button>
+              {/* ✅ pakai helper */}
+              {images.length > 0 && <ThreadImages images={images} />}
 
-              <button
-                onClick={() => toggleLike(thread.id)}
-                disabled={!!toggling[thread.id]}
-                className={`flex items-center gap-1 ${
-                  thread.isLiked ? "text-red-500" : "hover:text-zinc-200"
-                } ${toggling[thread.id] ? "opacity-60 cursor-not-allowed" : ""}`}
-              >
-                <Heart
-                  className="h-4 w-4"
-                  fill={thread.isLiked ? "currentColor" : "none"}
-                />
-                <span>{thread.likes}</span>
-              </button>
+              <div className="mt-3 flex items-center gap-8 text-zinc-400 text-sm">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/thread/${thread.id}`);
+                  }}
+                  className="flex items-center gap-1 hover:text-zinc-200"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span>{thread.reply}</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleLike(thread.id);
+                  }}
+                  disabled={!!toggling[thread.id]}
+                  className={`flex items-center gap-1 ${
+                    thread.isLiked ? "text-red-500" : "hover:text-zinc-200"
+                  } ${toggling[thread.id] ? "opacity-60 cursor-not-allowed" : ""}`}
+                >
+                  <Heart
+                    className="h-4 w-4"
+                    fill={thread.isLiked ? "currentColor" : "none"}
+                  />
+                  <span>{thread.likes}</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 };

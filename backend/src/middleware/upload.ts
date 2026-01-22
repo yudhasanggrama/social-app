@@ -21,7 +21,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 2048 * 2048 } // Batas ukuran 1MB (1024 * 1024 bytes)
+  limits: { fileSize: 2048 * 2048 }
 });
 
 export default upload

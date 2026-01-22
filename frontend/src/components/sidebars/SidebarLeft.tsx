@@ -44,7 +44,7 @@ const SidebarLeft = () => {
         }
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-zinc-950">
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-zinc-950 border-x">
    
       <div className="px-4 py-6">
         <h1 className="text-3xl font-bold text-green-500">circle</h1>

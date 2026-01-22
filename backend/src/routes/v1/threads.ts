@@ -8,6 +8,8 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get("/threads", ThreadController.findAll);
-router.post("/threads", upload.single("image"), ThreadController.create);
+router.post("/threads", upload.array("images", 10), ThreadController.create);
+router.get("/threads/:id", ThreadController.findThreadById)
+
 
 export default router;

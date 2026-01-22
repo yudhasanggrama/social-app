@@ -9,7 +9,8 @@ export interface Thread {
   id: number;
   content: string;
   created_at: string;
-  image?: string | null;
+  image?:string | null
+  images?: string[];
   user: ThreadUser;
   likes: number;
   reply: number;

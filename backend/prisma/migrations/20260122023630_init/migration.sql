@@ -19,7 +19,7 @@ CREATE TABLE "User" (
 CREATE TABLE "Thread" (
     "id" SERIAL NOT NULL,
     "content" TEXT NOT NULL,
-    "image" TEXT,
+    "image" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "number_of_replies" INTEGER NOT NULL DEFAULT 0,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createThread, getThreadsFormatted } from "../services/thread";
+import { createThread, getThreadsById, getThreadsFormatted } from "../services/thread";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { io } from "../app";
 
@@ -7,19 +7,26 @@ import { io } from "../app";
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     const { content } = req.body;
-    const file = req.file;
 
-    const image = file ? `/uploads/${file.filename}` : null;
+    const files = (req.files as Express.Multer.File[]) ?? [];
+    const images: string[] = files.map(
+      (f) => `/uploads/${f.filename}`
+    );
 
-    const thread = await createThread(req.user!.id, content, image);
-    
-    res.status(201).json({ thread });
+    const thread = await createThread(req.user!.id, content, images);
 
     io.emit("thread:created", thread);
+
+    return res.status(201).json({ success: true, thread });
   } catch (err) {
-    res.status(500).json({ message: "Failed to create thread" });
+    console.error("[create thread] error:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to create thread" });
   }
 };
+
+
 
 export const findAll = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id; 
@@ -35,3 +42,31 @@ export const findAll = async (req: AuthRequest, res: Response) => {
     },
   });
 };
+
+export const findThreadById = async (req: AuthRequest, res: Response) => {
+  try {
+    const threadId = Number(req.params.id);
+    const userId = req.user?.id;
+
+    if (Number.isNaN(threadId)) {
+      return res.status(400).json({ code: 400, status: "error", message: "Invalid thread id" });
+    }
+
+    const data = await getThreadsById(threadId, userId);
+
+    if (!data) {
+      return res.status(404).json({ code: 404, status: "error", message: "Thread not found" });
+    }
+
+    return res.status(200).json({
+      code: 200,
+      status: "success",
+      message: "Get Data Thread Successfully",
+      data,
+    });
+  } catch (err) {
+    return res.status(500).json({ code: 500, status: "error", message: "Internal server error" });
+  }
+};
+
+
