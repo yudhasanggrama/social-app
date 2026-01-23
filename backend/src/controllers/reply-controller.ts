@@ -6,10 +6,27 @@ import { io } from "../app";
 
 
 export const create = async (req: AuthRequest, res: Response) => {
-  const { thread_id, content } = req.body;
-  const reply = await createReply(req.user!.id, thread_id, content);
-  return res.status(200).json({ reply });
+  try {
+    const { thread_id, content } = req.body;
+
+    const threadId = Number(thread_id);
+    if (!threadId || Number.isNaN(threadId)) {
+      return res.status(400).json({ message: "Invalid thread_id" });
+    }
+
+    const files = (req.files as Express.Multer.File[]) ?? [];
+  
+
+    const images: string[] = files.map((f) => `uploads/${f.filename}`);
+
+    const reply = await createReply(req.user!.id, threadId, content ?? "", images);
+    return res.status(200).json({ reply });
+  } catch (err) {
+    console.error("[createReply] error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 };
+
 
 
 export const findByThreadId = async (req: AuthRequest, res: Response) => {

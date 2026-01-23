@@ -52,7 +52,7 @@ model Thread {
 model Reply {
   id         Int      @id @default(autoincrement())
   content    String
-  image      String?
+  image      String[] @default([])
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 

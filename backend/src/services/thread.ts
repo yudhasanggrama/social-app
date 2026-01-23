@@ -34,7 +34,7 @@ export const createThread = async (userId: number, content: string, image: strin
     id: thread.id,
     content: thread.content,
     created_at: thread.created_at,
-     image: thread.image ?? [],
+    image: thread.image ?? [],
 
     user: {
       id: thread.author.id,

@@ -37,19 +37,22 @@ export const getReplies = async () => {
 export const createReply = async (
   userId: number,
   threadId: number,
-  content: string
+  content: string,
+  image: string[]
 ) => {
   const r = await prisma.reply.create({
     data: {
       content,
       user_id: userId,
       thread_id: threadId,
+      image,
     },
     select: {
       id: true,
       content: true,
       created_at: true,
       thread_id: true,
+      image : true,
       users: {
         select: {
           id: true,
@@ -66,6 +69,7 @@ export const createReply = async (
     thread_id: r.thread_id,
     content: r.content,
     created_at: r.created_at,
+    image: r.image ?? [],
     user: {
       id: r.users.id,
       username: r.users.username,
@@ -84,6 +88,7 @@ export const getRepliesByThreadId = async (threadId: number, userId?: number) =>
       id: true,
       content: true,
       created_at: true,
+      image:true,
 
       // ✅ sesuai schema: users
       users: {
@@ -117,6 +122,7 @@ export const getRepliesByThreadId = async (threadId: number, userId?: number) =>
       id: r.id,
       content: r.content,
       created_at: r.created_at,
+      image: r.image,
       user: {
         id: r.users.id,
         username: r.users.username,
