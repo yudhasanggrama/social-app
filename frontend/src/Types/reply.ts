@@ -14,4 +14,7 @@ export interface ReplyItem {
   user: ThreadUser;
   likes: number;
   isLiked: boolean;
+
+  image?:string | null
+  images?: string[];
 }

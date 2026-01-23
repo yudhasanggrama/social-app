@@ -7,9 +7,20 @@ import { io } from "../app";
 
 export const create = async (req: AuthRequest, res: Response) => {
   const { thread_id, content } = req.body;
-  const reply = await createReply(req.user!.id, thread_id, content);
+
+  const threadId = Number(thread_id);
+  if (!Number.isInteger(threadId)) {
+    return res.status(400).json({ message: "thread_id harus angka" });
+  }
+
+  const files = (req.files as Express.Multer.File[]) || [];
+  const images = files.map((f) => `/uploads/${f.filename}`);
+
+  const reply = await createReply(req.user!.id, threadId, content, images);
   return res.status(200).json({ reply });
 };
+
+
 
 
 export const findByThreadId = async (req: AuthRequest, res: Response) => {

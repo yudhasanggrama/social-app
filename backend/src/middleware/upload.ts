@@ -1,6 +1,5 @@
 import multer from "multer";
 import path from "path";
-import { Request } from "express";
 import fs from "fs"
 
 const uploadDir = path.join(process.cwd(), "uploads");

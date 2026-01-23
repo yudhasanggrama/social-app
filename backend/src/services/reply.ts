@@ -37,19 +37,22 @@ export const getReplies = async () => {
 export const createReply = async (
   userId: number,
   threadId: number,
-  content: string
+  content: string,
+  images: string[] = []
 ) => {
   const r = await prisma.reply.create({
     data: {
       content,
       user_id: userId,
       thread_id: threadId,
+      image: images,
     },
     select: {
       id: true,
       content: true,
       created_at: true,
       thread_id: true,
+      image: true,
       users: {
         select: {
           id: true,
@@ -60,20 +63,25 @@ export const createReply = async (
       },
     },
   });
-  
+
   return {
     id: r.id,
     thread_id: r.thread_id,
     content: r.content,
     created_at: r.created_at,
+    image: r.image,
     user: {
       id: r.users.id,
       username: r.users.username,
       name: r.users.full_name,
-      profile_picture: r.users.photo_profile,
+      photo_profile: r.users.photo_profile,
     },
+    likes: 0,
+    isLiked: false,
   };
 };
+
+
 
 
 export const getRepliesByThreadId = async (threadId: number, userId?: number) => {
@@ -84,8 +92,9 @@ export const getRepliesByThreadId = async (threadId: number, userId?: number) =>
       id: true,
       content: true,
       created_at: true,
+      thread_id: true,      // ✅ TAMBAH
+      image: true,
 
-      // ✅ sesuai schema: users
       users: {
         select: {
           id: true,
@@ -95,19 +104,10 @@ export const getRepliesByThreadId = async (threadId: number, userId?: number) =>
         },
       },
 
-      // ✅ sesuai schema: replyLikes (untuk count)
-      _count: {
-        select: {
-          replyLikes: true,
-        },
-      },
+      _count: { select: { replyLikes: true } },
 
-      // ✅ sesuai schema: replyLikes (untuk isLiked)
       replyLikes: userId
-        ? {
-            where: { user_id: userId },
-            select: { id: true },
-          }
+        ? { where: { user_id: userId }, select: { id: true } }
         : false,
     },
   });
@@ -115,19 +115,25 @@ export const getRepliesByThreadId = async (threadId: number, userId?: number) =>
   return {
     replies: replies.map((r) => ({
       id: r.id,
+      thread_id: r.thread_id,  // ✅ TAMBAH
       content: r.content,
       created_at: r.created_at,
+      image: r.image,          // ✅ TAMBAH
+
       user: {
         id: r.users.id,
         username: r.users.username,
         name: r.users.full_name,
-        profile_picture: r.users.photo_profile,
+        photo_profile: r.users.photo_profile, // ✅ samain sama FE
       },
+
       likes: r._count.replyLikes,
       isLiked: userId ? (Array.isArray(r.replyLikes) && r.replyLikes.length > 0) : false,
     })),
   };
 };
+
+
 
 
 

@@ -1,22 +1,33 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Heart, MessageCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Thread } from "@/Types/thread";
 import api from "@/lib/api";
 import { socket } from "@/lib/socket";
-import { useNavigate } from "react-router-dom";
-import ThreadImages from "@/helpers/ThreadsImageProps";
+import PostRow from "./PostRow";
+
+import { useDispatch } from "react-redux";
+import type { AppDispatch } from "@/store/types";
+import { setThreadLikeFromServer } from "@/store/likes";
 
 const PostItem = () => {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState<Record<number, boolean>>({});
-  const navigate = useNavigate();
+  const dispatch = useDispatch<AppDispatch>();
 
   const fetchThreads = async () => {
     try {
       const res = await api.get("/threads");
-      setThreads(res.data.data.threads);
+      const list = res.data.data.threads as Thread[];
+      setThreads(list);
+
+      list.forEach((t) => {
+        dispatch(
+          setThreadLikeFromServer({
+            threadId: t.id,
+            isLiked: Boolean(t.isLiked),
+            likesCount: Number(t.likes ?? 0),
+          })
+        );
+      });
     } catch (e) {
       console.error("Failed to fetch threads", e);
     } finally {
@@ -28,24 +39,25 @@ const PostItem = () => {
     fetchThreads();
 
     const onCreated = (thread: Thread) => {
-      setThreads((prev) =>
-        prev.some((t) => t.id === thread.id) ? prev : [thread, ...prev]
+      setThreads((prev) => (prev.some((t) => t.id === thread.id) ? prev : [thread, ...prev]));
+      dispatch(
+        setThreadLikeFromServer({
+          threadId: thread.id,
+          isLiked: Boolean(thread.isLiked),
+          likesCount: Number(thread.likes ?? 0),
+        })
       );
     };
 
-    const onLikeUpdated = (p: {
-      threadId: number;
-      likesCount: number;
-      actorUserId: number;
-      liked: boolean;
-    }) => {
-      if (!p || typeof p.threadId !== "number" || typeof p.likesCount !== "number") {
-        console.warn("[client] invalid like_updated payload:", p);
-        return;
-      }
+    const onLikeUpdated = (p: { threadId: number; likesCount: number }) => {
+      if (!p || typeof p.threadId !== "number" || typeof p.likesCount !== "number") return;
 
-      setThreads((prev) =>
-        prev.map((t) => (t.id === p.threadId ? { ...t, likes: p.likesCount } : t))
+      dispatch(
+        setThreadLikeFromServer({
+          threadId: p.threadId,
+          isLiked: false as any,
+          likesCount: p.likesCount,
+        }) as any
       );
     };
 
@@ -56,129 +68,11 @@ const PostItem = () => {
       socket.off("thread:created", onCreated);
       socket.off("thread:like_updated", onLikeUpdated);
     };
-  }, []);
-
-  const toggleLike = async (threadId: number) => {
-    if (toggling[threadId]) return;
-
-    const prevThreads = threads;
-
-    setThreads((prev) =>
-      prev.map((t) =>
-        t.id === threadId
-          ? {
-              ...t,
-              isLiked: !t.isLiked,
-              likes: t.isLiked ? t.likes - 1 : t.likes + 1,
-            }
-          : t
-      )
-    );
-
-    setToggling((p) => ({ ...p, [threadId]: true }));
-
-    try {
-      const res = await api.post("/likes/toggle", { thread_id: threadId });
-      const likedFromServer: boolean | undefined = res.data?.result?.liked;
-
-      if (typeof likedFromServer === "boolean") {
-        setThreads((prev) =>
-          prev.map((t) => (t.id === threadId ? { ...t, isLiked: likedFromServer } : t))
-        );
-      } else {
-        await fetchThreads();
-      }
-    } catch (e) {
-      console.error("Toggle like failed", e);
-      setThreads(prevThreads);
-    } finally {
-      setToggling((p) => ({ ...p, [threadId]: false }));
-    }
-  };
+  }, [dispatch]);
 
   if (loading) return <div>Loading...</div>;
 
-  return (
-    <>
-      {threads.map((thread) => {
-        const images =
-          Array.isArray(thread.image) && thread.image.length > 0
-            ? thread.image.map((p) => `http://localhost:9000${p}`)
-            : [];
-
-        return (
-          <div
-            key={thread.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => navigate(`/thread/${thread.id}`)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") navigate(`/thread/${thread.id}`);
-            }}
-            className="flex gap-4 px-4 py-4 border-b border-zinc-800 hover:bg-zinc-900/50"
-          >
-            <Avatar>
-              <AvatarImage
-                src={thread.user?.profile_picture ?? "https://github.com/shadcn.png"}
-              />
-              <AvatarFallback>
-                {(thread.user?.name?.[0] ?? "U").toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-1 text-sm">
-                <span className="font-semibold text-zinc-100">
-                  {thread.user?.name ?? "Unknown"}
-                </span>
-                <span className="text-zinc-400">
-                  @{thread.user?.username ?? "unknown"} ·{" "}
-                  {new Date(thread.created_at).toLocaleString()}
-                </span>
-              </div>
-
-              <p className="mt-1 text-sm text-zinc-200 leading-relaxed">
-                {thread.content}
-              </p>
-
-              {/* ✅ pakai helper */}
-              {images.length > 0 && <ThreadImages images={images} />}
-
-              <div className="mt-3 flex items-center gap-8 text-zinc-400 text-sm">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/thread/${thread.id}`);
-                  }}
-                  className="flex items-center gap-1 hover:text-zinc-200"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  <span>{thread.reply}</span>
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleLike(thread.id);
-                  }}
-                  disabled={!!toggling[thread.id]}
-                  className={`flex items-center gap-1 ${
-                    thread.isLiked ? "text-red-500" : "hover:text-zinc-200"
-                  } ${toggling[thread.id] ? "opacity-60 cursor-not-allowed" : ""}`}
-                >
-                  <Heart
-                    className="h-4 w-4"
-                    fill={thread.isLiked ? "currentColor" : "none"}
-                  />
-                  <span>{thread.likes}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </>
-  );
+  return <>{threads.map((t) => <PostRow key={t.id} thread={t} />)}</>;
 };
 
 export default PostItem;

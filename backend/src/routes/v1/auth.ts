@@ -9,7 +9,7 @@ router.post("/register", handleRegister);
 router.post("/login", handleLogin);
 
 router.use(authMiddleware);
-router.post("/logout" , handleLogout)
 router.get("/me", MyProfile)
+router.post("/logout" , handleLogout)
 
 export default router;

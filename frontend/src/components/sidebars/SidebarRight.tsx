@@ -1,51 +1,48 @@
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "../ui/card";
 import { FaGithub, FaLinkedin, FaFacebook, FaInstagram } from "react-icons/fa";
-import { useEffect, useState } from "react";
-import api from "@/lib/api";
+import { useEffect } from "react";
 
-export type MeUser = {
-  id: number;
-  username: string;
-  full_name?: string;
-  name?: string;
-  photo_profile?: string | null;
-  profile_picture?: string | null;
-  bio?: string | null;
-};
+import { useDispatch, useSelector } from "react-redux";
+import type { AppDispatch } from "@/store/types";
+import {
+  fetchMe,
+  selectMe,
+  selectIsProfileFetching,
+  selectProfileFetchStatus,
+  selectProfileFetchError,
+} from "@/store/profile";
 
 const SidebarRight = () => {
-  const [me, setMe] = useState<MeUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch<AppDispatch>();
+
+  const me = useSelector(selectMe);
+  const loading = useSelector(selectIsProfileFetching);
+  const fetchStatus = useSelector(selectProfileFetchStatus);
+  const fetchError = useSelector(selectProfileFetchError);
 
   useEffect(() => {
-    const fetchMe = async () => {
-      try {
-        const res = await api.get("/me");
-        setMe(res.data.user);
-      } catch {
-        setMe(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!me && fetchStatus === "idle") {
+      dispatch(fetchMe());
+    }
+  }, [dispatch, me, fetchStatus]);
 
-    fetchMe();
-  }, []);
-
-  const displayName = me?.full_name ?? me?.name ?? "Guest";
-  const displayUsername = me?.username ? `@${me.username}` : "@guest";
+  // kamu punya beberapa nama field, kita fallback-in
+  const displayName = (me as any)?.full_name ?? (me as any)?.name ?? "Guest";
+  const displayUsername = (me as any)?.username ? `@${(me as any).username}` : "@guest";
   const avatarSrc =
-    me?.photo_profile ??
-    me?.profile_picture ??
+    (me as any)?.photo_profile ??
+    (me as any)?.profile_picture ??
     "https://github.com/shadcn.png";
   const fallback = (displayName?.[0] ?? "U").toUpperCase();
-  const bio = me?.bio ?? "Login untuk melihat profil";
+  const bio = (me as any)?.bio ?? "Login untuk melihat profil";
+
+  // follower/following kalau backend kamu sudah ada
+  const following = (me as any)?.following_count ?? 0;
+  const followers = (me as any)?.follower_count ?? 0;
+
+  const isLoggedOut = !loading && !me && fetchStatus === "failed";
 
   return (
     <aside className="space-y-4 px-4 py-6">
@@ -64,28 +61,28 @@ const SidebarRight = () => {
               className="rounded-full border border-white px-4 py-1 text-sm mt-10"
               disabled={loading || !me}
             >
-              Edit Profile
+              {loading ? "Loading..." : "Edit Profile"}
             </Button>
           </div>
 
           <div className="mt-2">
-            <p className="font-semibold">✨ {displayName} ✨</p>
+            <p className="font-semibold">{displayName}</p>
             <p className="text-sm text-zinc-400">{displayUsername}</p>
 
             <p className="mt-2 text-sm text-zinc-300">{bio}</p>
-            
+
             <div className="mt-3 flex gap-4 text-sm">
               <span>
-                <b>0</b> <span className="text-zinc-400">Following</span>
+                <b>{following}</b> <span className="text-zinc-400">Following</span>
               </span>
               <span>
-                <b>0</b> <span className="text-zinc-400">Followers</span>
+                <b>{followers}</b> <span className="text-zinc-400">Followers</span>
               </span>
             </div>
 
-            {!loading && !me && (
+            {isLoggedOut && (
               <p className="mt-3 text-xs text-zinc-500">
-                Kamu belum login.
+                Kamu belum login{fetchError ? ` (${fetchError})` : ""}.
               </p>
             )}
           </div>
@@ -93,31 +90,28 @@ const SidebarRight = () => {
       </Card>
 
       <Card className="bg-zinc-900">
-          <div className="rounded-xl bg-zinc-900 p-4">
-            <h2 className="mb-3 font-semibold">Suggested for you</h2>
+        <div className="rounded-xl bg-zinc-900 p-4">
+          <h2 className="mb-3 font-semibold">Suggested for you</h2>
 
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-2"
-              >
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-9 w-9">
-                    <AvatarImage src="https://github.com/shadcn.png" />
-                    <AvatarFallback>U</AvatarFallback>
-                  </Avatar>
-                  <div className="text-sm">
-                    <p className="font-medium">User Name</p>
-                    <p className="text-zinc-400">@username</p>
-                  </div>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src="https://github.com/shadcn.png" />
+                  <AvatarFallback>U</AvatarFallback>
+                </Avatar>
+                <div className="text-sm">
+                  <p className="font-medium">User Name</p>
+                  <p className="text-zinc-400">@username</p>
                 </div>
-
-                <button className="rounded-full bg-white px-4 py-1 text-sm text-black hover:bg-zinc-200">
-                  Follow
-                </button>
               </div>
-            ))}
-          </div>
+
+              <button className="rounded-full bg-white px-4 py-1 text-sm text-black hover:bg-zinc-200">
+                Follow
+              </button>
+            </div>
+          ))}
+        </div>
       </Card>
 
       <Card className="bg-zinc-900">
@@ -125,8 +119,7 @@ const SidebarRight = () => {
           <div className="flex flex-col gap-1 px-5 py-4 text-sm text-zinc-300">
             <div className="flex items-center justify-between">
               <p>
-                Developed by{" "}
-                <span className="font-medium text-white">Yudha S.W </span>
+                Developed by <span className="font-medium text-white">Yudha S.W </span>
               </p>
 
               <div className="flex items-center gap-3 text-zinc-400">
