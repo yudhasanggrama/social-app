@@ -1,4 +1,3 @@
-// CreatePostDialog.tsx
 import {
   DialogContent,
   DialogHeader,
@@ -11,6 +10,9 @@ import { ImagePlus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useFlashMessage } from "@/hooks/useFlashMessage";
 import api from "@/lib/api";
+import { useSelector } from "react-redux";
+import { selectMe, selectAvatarVersion } from "@/store/profile";
+import { avatarImgSrc } from "@/lib/image";
 
 type QueueItem = {
   id: string;
@@ -24,10 +26,15 @@ const CreatePostDialog = ({ onClose }: { onClose: () => Promise<void> }) => {
   const [loading, setLoading] = useState(false);
   const { show } = useFlashMessage();
 
+  const me = useSelector(selectMe);
+  const v = useSelector(selectAvatarVersion);
+  const myAvatar = avatarImgSrc(me?.avatar, v);
+  const fallback = (me?.name?.[0] ?? "U").toUpperCase();
+
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const pushMsg = (type: QueueItem["type"], text: string) => {
     const id = crypto.randomUUID();
-    setQueue((q) => [...q, { id, type, text }]);
+    setQueue((q) => [...q, { id, type, text }]); // ✅ FIX
     setTimeout(() => {
       setQueue((q) => q.filter((m) => m.id !== id));
     }, 3500);
@@ -49,21 +56,18 @@ const CreatePostDialog = ({ onClose }: { onClose: () => Promise<void> }) => {
   };
 
   const handleSubmit = async () => {
-    // kalau mau wajib text, balikin ke: if (!content.trim()) return;
     if (!content.trim() && imageFiles.length === 0) return;
 
     try {
       setLoading(true);
-
-      await new Promise((r) => setTimeout(r, 0));
 
       const formData = new FormData();
       formData.append("content", content);
       imageFiles.forEach((file) => formData.append("images", file));
 
       if (imageFiles.length > 0) {
-        pushMsg("info", `Uploading ${imageFiles.length} image(s)...`);
-      } 
+        pushMsg("info", `Uploading ${imageFiles.length} image(s).`);
+      }
 
       await api.post("/threads", formData, {
         withCredentials: true,
@@ -84,8 +88,7 @@ const CreatePostDialog = ({ onClose }: { onClose: () => Promise<void> }) => {
 
   return (
     <DialogContent
-      className="max-w-xl border-zinc-800 bg-zinc-950 text-white
-      fixed top-10 left-1/2 transform -translate-x-1/2 translate-y-0"
+      className="max-w-xl border-zinc-800 bg-zinc-950 text-white fixed top-10 left-1/2 transform -translate-x-1/2 translate-y-0"
       onPointerDownOutside={(e) => loading && e.preventDefault()}
       onEscapeKeyDown={(e) => loading && e.preventDefault()}
     >
@@ -120,8 +123,8 @@ const CreatePostDialog = ({ onClose }: { onClose: () => Promise<void> }) => {
       <form>
         <div className="flex gap-4 border-b w-full pb-4">
           <Avatar>
-            <AvatarImage src="https://github.com/shadcn.png" />
-            <AvatarFallback>U</AvatarFallback>
+            <AvatarImage src={myAvatar} />
+            <AvatarFallback>{fallback}</AvatarFallback>
           </Avatar>
 
           <input

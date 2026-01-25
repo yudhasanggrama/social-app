@@ -9,8 +9,7 @@ export interface Thread {
   id: number;
   content: string;
   created_at: string;
-  image?:string | null
-  images?: string[];
+  image: string[];
   user: ThreadUser;
   likes: number;
   reply: number;
@@ -19,5 +18,5 @@ export interface Thread {
 
 export type CreateThreadPayload = {
   content: string;
-  image?: string | null;
+  image?: string[]; 
 };

@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom"
 import { useSelector } from "react-redux"
-import type { RootState } from "@/store"
+import type { RootState } from "@/store/types"
 
 const ProtectedRoute = () => {
   const { isLoggedIn, authChecked } = useSelector(

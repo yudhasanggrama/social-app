@@ -70,3 +70,25 @@ export const findThreadById = async (req: AuthRequest, res: Response) => {
 };
 
 
+export const findMyThreads = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ code: 401, status: "error", message: "Unauthorized" });
+    }
+
+    const threads = await getThreadsFormatted(userId, userId);
+
+    return res.status(200).json({
+      code: 200,
+      status: "success",
+      message: "Get My Threads Successfully",
+      data: { threads },
+    });
+  } catch (err) {
+    console.error("[findMyThreads] error:", err);
+    return res.status(500).json({ code: 500, status: "error", message: "Internal server error" });
+  }
+};
+
+

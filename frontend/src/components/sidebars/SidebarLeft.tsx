@@ -1,51 +1,69 @@
-import { LogOut } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { SidebarNav } from "./SidebarNav"
-import { useDispatch } from "react-redux"
-import { useNavigate } from "react-router-dom"
-import api from "@/lib/api"
-import { logout } from "@/store"
-import { useEffect, useState } from "react"
-import type { MeUser } from "./SidebarRight"
+import { LogOut } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SidebarNav } from "./SidebarNav";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import api from "@/lib/api";
+import { logout } from "@/store";
+import type { AppDispatch } from "@/store/types";
+import {
+  fetchProfile,
+  selectMe,
+  selectIsProfileLoading,
+  selectProfileFetchStatus,
+  selectAvatarVersion,
+} from "@/store/profile";
+import { avatarImgSrc } from "@/lib/image";
+import { useEffect } from "react";
+import { resetAll } from "@/store/index";
+import { socket } from "@/lib/socket";
+
 
 const SidebarLeft = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
 
-      const [me, setMe] = useState<MeUser | null>(null);
-      const [loading, setLoading] = useState(true);
+  const me = useSelector(selectMe);
+  const loading = useSelector(selectIsProfileLoading);
+  const fetchStatus = useSelector(selectProfileFetchStatus);
+  const v = useSelector(selectAvatarVersion);
 
-      useEffect(() => {
-        const fetchMe = async () => {
-          try {
-            const res = await api.get("/me");
-            setMe(res.data.user);
-          } catch {
-            setMe(null);
-          } finally {
-            setLoading(false);
-          }
-        };
+  // ✅ FIX: fetch profile juga di SidebarLeft
+  // (kalau kamu sudah punya AppLayout fetch global, ini boleh dihapus)
+  useEffect(() => {
+    if (!me && fetchStatus === "idle") dispatch(fetchProfile());
+  }, [dispatch, me, fetchStatus]);
 
-        fetchMe();
-      }, []);
+  const handleLogout = async () => {
+    try {
+      // 1. backend logout (hapus cookie)
+      await api.post("/logout", null, { withCredentials: true });
+    } catch {
+      // backend boleh gagal, frontend tetap harus bersih
+    } finally {
+      // 2. putus socket akun lama
+      if (socket.connected) {
+        socket.disconnect();
+      }
 
+      // 3. reset SEMUA redux state (profile, follow, likes, dll)
+      dispatch(resetAll());
 
+      // 4. reset auth
+      dispatch(logout());
 
-    const dispatch = useDispatch()
-    const navigate = useNavigate()
-    
-    const handleLogout = async () => {
-            try {
-            await api.post("/logout") 
-            dispatch(logout())        
-            navigate("/login", { replace: true })
-            } catch {
-            alert("Logout gagal")
-            }
-        }
+      // 5. pindah halaman
+      navigate("/login", { replace: true });
+    }
+  };
+
+  const name = me?.name ?? "Guest";
+  const username = me?.username ?? "guest";
+  const avatarSrc = avatarImgSrc(me?.avatar, v);
+  const fallback = (name[0] ?? "U").toUpperCase();
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-zinc-950 border-x">
-   
       <div className="px-4 py-6">
         <h1 className="text-3xl font-bold text-green-500">circle</h1>
       </div>
@@ -58,25 +76,35 @@ const SidebarLeft = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Avatar>
-              <AvatarImage src="https://github.com/shadcn.png" />
-              <AvatarFallback>U</AvatarFallback>
+              <AvatarImage src={avatarSrc} />
+              <AvatarFallback>{fallback}</AvatarFallback>
             </Avatar>
 
             <div className="text-sm">
-              <p className="font-medium">{me?.full_name}</p>
-              <p className="text-zinc-400">{me?.username}</p>
+              {loading ? (
+                <>
+                  <div className="h-4 w-28 animate-pulse rounded bg-zinc-800" />
+                  <div className="mt-1 h-3 w-20 animate-pulse rounded bg-zinc-800" />
+                </>
+              ) : (
+                <>
+                  <p className="font-medium">{name}</p>
+                  <p className="text-zinc-400">@{username}</p>
+                </>
+              )}
             </div>
           </div>
 
-
           <LogOut
             onClick={handleLogout}
-            className="h-5 w-5 cursor-pointer text-zinc-400 hover:text-red-500"
+            className={`h-5 w-5 cursor-pointer text-zinc-400 hover:text-red-500 ${
+              loading ? "opacity-50 pointer-events-none" : ""
+            }`}
           />
         </div>
       </div>
     </aside>
-  )
-}
+  );
+};
 
-export default SidebarLeft
+export default SidebarLeft;

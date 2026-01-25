@@ -9,6 +9,7 @@ router.use(authMiddleware);
 
 router.get("/threads", ThreadController.findAll);
 router.post("/threads", upload.array("images", 10), ThreadController.create);
+router.get("/threads/me", ThreadController.findMyThreads)
 router.get("/threads/:id", ThreadController.findThreadById)
 
 

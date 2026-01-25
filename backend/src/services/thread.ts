@@ -49,8 +49,9 @@ export const createThread = async (userId: number, content: string, image: strin
   };
 };
 
-export const getThreads = async (user_id?: number) => {
+export const getThreads = async (user_id?: number, authorId?: number) => {
   return prisma.thread.findMany({
+    where: authorId ? { created_by: authorId } : undefined,
     orderBy: { created_at: "desc" },
     include: {
       author: {
@@ -78,14 +79,14 @@ export const getThreads = async (user_id?: number) => {
   
 };
 
-export const getThreadsFormatted = async (user_id?: number) => {
-  const threads = await getThreads(user_id);
+export const getThreadsFormatted = async (user_id?: number, createdBy?: number) => {
+  const threads = await getThreads(user_id, createdBy);
 
   return threads.map((thread) => ({
     id: thread.id,
     content: thread.content,
     created_at: thread.created_at,
-    image: thread.image ?? [], 
+    image: thread.image ?? [],
 
     user: {
       id: thread.author.id,
@@ -96,10 +97,10 @@ export const getThreadsFormatted = async (user_id?: number) => {
 
     likes: thread._count.likes,
     reply: thread._count.replies,
-
     isLiked: user_id ? thread.likes.length > 0 : false,
   }));
 };
+
 
 
 export const getThreadsById = async (id: number, userId?: number) => {
@@ -148,5 +149,7 @@ export const getThreadsById = async (id: number, userId?: number) => {
     isLiked: userId ? thread.likes.length > 0 : false,
   };
 };
+
+
 
 

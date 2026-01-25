@@ -29,28 +29,27 @@ export function Login() {
         setForm({ ...form, [e.target.name]: e.target.value })
     }
 
-   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
 
-    try {
-        await api.post("/login", form, { withCredentials: true });
+        try {
+            await api.post("/login", form, { withCredentials: true });
 
-        const me = await api.get("/me", { withCredentials: true });
+            const meRes = await api.get("/profile", { withCredentials: true });
 
-        dispatch(
-        login({
-            id: me.data.user.id,
-            name: me.data.user.username, // atau full_name
-        })
-        );
+            dispatch(
+            login({
+                id: meRes.data.id,
+                name: meRes.data.username, // atau meRes.data.name
+            })
+            );
 
-        navigate("/", { replace: true });
-    } catch (err) {
-        console.error(err);
-        alert("Login gagal");
-    }
+            navigate("/", { replace: true });
+        } catch (err) {
+            console.error(err);
+            alert("Login gagal");
+        }
     };
-
 
     return (
     <>

@@ -1,23 +1,26 @@
-import { configureStore, createSlice, type PayloadAction } from "@reduxjs/toolkit"
+import { configureStore, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import likesReducer from "./likes";
+import profileReducer from "./profile";
+import followReducer from "./follow";
 
 // ===== Auth Slice =====
-interface AuthState {
+export interface AuthState {
   id: number | null;
-  name: string
-  isLoggedIn: boolean
-  authChecked: boolean,
+  name: string;
+  isLoggedIn: boolean;
+  authChecked: boolean;
 }
 
-const initialState: AuthState = {
+const authInitialState: AuthState = {
   id: null,
   name: "",
   isLoggedIn: false,
-   authChecked: false,
-}
+  authChecked: false,
+};
 
 const authSlice = createSlice({
   name: "auth",
-  initialState,
+  initialState: authInitialState,
   reducers: {
     login: (state, action: PayloadAction<{ id: number; name: string }>) => {
       state.id = action.payload.id;
@@ -32,20 +35,26 @@ const authSlice = createSlice({
       state.authChecked = true;
     },
     setAuthChecked: (state) => {
-      state.authChecked = true
-    }
-  },
-})
+      state.authChecked = true;
+    },
 
-export const { login, logout, setAuthChecked } = authSlice.actions
+    // ✅ GLOBAL RESET ACTION
+    resetAll: () => authInitialState,
+  },
+});
+
+export const { login, logout, setAuthChecked, resetAll } = authSlice.actions;
 
 // ===== Configure Store =====
 export const store = configureStore({
   reducer: {
     auth: authSlice.reducer,
+    likes: likesReducer,
+    profile: profileReducer,
+    follow: followReducer, // ✅ penting: key = follow (bukan follows)
   },
-})
+});
 
-// ===== Types =====
-export type RootState = ReturnType<typeof store.getState>
-export type AppDispatch = typeof store.dispatch
+// types
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;

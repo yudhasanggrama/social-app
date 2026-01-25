@@ -1,9 +1,8 @@
 import { Routes, Route } from "react-router-dom"
 import { useEffect } from "react"
 import { useDispatch } from "react-redux"
-import type { AppDispatch } from "./store"
+import type { AppDispatch } from "./store/types"
 import { login } from "./store"
-import api from "./lib/api"
 import {Login} from "./pages/Login"
 import Register from "./pages/Register"
 import ProtectedRoute from "./components/ProtectedRoute"
@@ -12,37 +11,58 @@ import Home from "./pages/Home"
 import GuestRoute from "./components/GuestRoute"
 import { FlashMessageProvider } from "./contexts/FlashProvider"
 import ThreadDetailPage from "./pages/ThreadDetailPage"
+import { fetchProfile } from "./store/profile"
+import { logout } from "./store"
+import ProfilePage from "./pages/ProfilePage"
+import AppLayout from "./components/layouts/AppLayout"
+import FollowPage from "./pages/FollowPage"
+
 
 
 
 function App() {
-  const dispatch = useDispatch<AppDispatch>()
+const dispatch = useDispatch<AppDispatch>()
 
-
- useEffect(() => {
-  api.get("/me")
-    .then(res => {
-      dispatch(login({ name: res.data.user.username }))
-    })
-    .catch(() => {
-      dispatch(setAuthChecked())
-    })
-}, [dispatch])
+  useEffect(() => {
+    dispatch(fetchProfile())
+      .unwrap()
+      .then((profile) => {
+        dispatch(
+          login({
+            id: Number(profile.id),
+            name: profile.username, 
+          })
+        );
+      })
+      .catch(() => {
+        dispatch(logout()); 
+      })
+      .finally(() => {
+        dispatch(setAuthChecked()); 
+      });
+  }, [dispatch]);
 
   return (
     <FlashMessageProvider>
-      <Routes>
-        <Route element={<GuestRoute />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-        </Route>
+  <Routes>
+    {/* GUEST */}
+    <Route element={<GuestRoute />}>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+    </Route>
 
-        <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/thread/:id" element={<ThreadDetailPage />} />
-        </Route>
-      </Routes>
-    </FlashMessageProvider>
+    {/* PROTECTED + LAYOUT */}
+    <Route element={<ProtectedRoute />}>
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<Home />} />
+        <Route path="/thread/:id" element={<ThreadDetailPage />} />
+        <Route path="/follow" element={<FollowPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+      </Route>
+    </Route>
+  </Routes>
+</FlashMessageProvider>
+
   )
 }
 

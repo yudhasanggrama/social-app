@@ -15,6 +15,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     }
 
     const files = (req.files as Express.Multer.File[]) ?? [];
+    
   
 
     const images: string[] = files.map((f) => `uploads/${f.filename}`);
@@ -26,7 +27,6 @@ export const create = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
-
 
 
 export const findByThreadId = async (req: AuthRequest, res: Response) => {

@@ -55,6 +55,7 @@ model Reply {
   image      String[] @default([])
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+  
 
   user_id    Int 
   thread_id  Int 

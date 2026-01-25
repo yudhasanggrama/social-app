@@ -33,7 +33,7 @@ CREATE TABLE "Thread" (
 CREATE TABLE "Reply" (
     "id" SERIAL NOT NULL,
     "content" TEXT NOT NULL,
-    "image" TEXT,
+    "image" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "user_id" INTEGER NOT NULL,

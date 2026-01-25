@@ -12,6 +12,6 @@ export function signToken(payload:UserPayload) {
     return jwt.sign(payload, JWT_SECRET, {expiresIn: "1d"})
 }
 
-export function verifyToken(token:string) {
+export function verifyToken(token: string): UserPayload {
     return jwt.verify(token, JWT_SECRET) as UserPayload;
 }

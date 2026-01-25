@@ -90,7 +90,6 @@ export const getRepliesByThreadId = async (threadId: number, userId?: number) =>
       created_at: true,
       image:true,
 
-      // ✅ sesuai schema: users
       users: {
         select: {
           id: true,
@@ -100,14 +99,12 @@ export const getRepliesByThreadId = async (threadId: number, userId?: number) =>
         },
       },
 
-      // ✅ sesuai schema: replyLikes (untuk count)
       _count: {
         select: {
           replyLikes: true,
         },
       },
-
-      // ✅ sesuai schema: replyLikes (untuk isLiked)
+      
       replyLikes: userId
         ? {
             where: { user_id: userId },
