@@ -1,78 +1,52 @@
-import { useEffect, useRef } from "react";
+import { useMemo, useState } from "react";
 import { Outlet } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import type { AppDispatch } from "@/store/types";
-import { fetchProfile, selectMe } from "@/store/profile";
 import SidebarLeft from "@/components/sidebars/SidebarLeft";
 import SidebarRight from "@/components/sidebars/SidebarRight";
 
-import { socket } from "@/lib/socket";
-import { fetchFollowersThunk, fetchFollowingThunk, fetchSuggestedThunk } from "@/store/follow";
+import CreatePostDialog from "@/components/threads/CreatePostDialog";
+import EditProfileDialog from "@/components/profile/EditProfileDialog";
+
+import { useFollowSocket } from "@/hooks/useFollowSocket"; // ✅ pakai hook
 
 export default function AppLayout() {
-  const dispatch = useDispatch<AppDispatch>();
-  const me = useSelector(selectMe);
+  useFollowSocket(); // ✅ socket follow realtime di sini
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [openCreatePost, setOpenCreatePost] = useState(false);
+  const [openEditProfile, setOpenEditProfile] = useState(false);
 
-  useEffect(() => {
-    // kalau belum login: jangan connect socket & jangan fetch follow lists
-    if (!me?.id) return;
-
-    // normalize id supaya tidak error number vs string
-    const myId = Number(me.id);
-    if (!Number.isFinite(myId)) return;
-
-    // ✅ bootstrap (sekali saat me.id berubah / login akun baru)
-    dispatch(fetchProfile());
-    dispatch(fetchFollowersThunk());
-    dispatch(fetchFollowingThunk());
-    dispatch(fetchSuggestedThunk(5));
-
-    // ✅ connect socket hanya kalau belum connect
-    if (!socket.connected) socket.connect();
-
-    const scheduleRefetch = (flags: { followers?: boolean; following?: boolean; suggested?: boolean }) => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        if (flags.followers) dispatch(fetchFollowersThunk());
-        if (flags.following) dispatch(fetchFollowingThunk());
-        if (flags.suggested) dispatch(fetchSuggestedThunk(5));
-      }, 150);
-    };
-
-    const handler = (p: { followerId: number; targetUserId: number; isFollowing: boolean }) => {
-      // aku yang klik follow/unfollow
-      if (p.followerId === myId) {
-        scheduleRefetch({ followers: true, following: true, suggested: true });
-        return;
-      }
-
-      // aku yang di-follow/unfollow orang lain
-      if (p.targetUserId === myId) {
-        scheduleRefetch({ followers: true });
-      }
-    };
-
-    socket.on("follow:changed", handler);
-
-    return () => {
-      socket.off("follow:changed", handler);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      // ❌ jangan disconnect di sini (disconnect saat logout saja)
-    };
-  }, [dispatch, me?.id]);
+  const coverStyle = useMemo(
+    () => ({
+      background:
+        "linear-gradient(90deg, rgba(74,222,128,0.85), rgba(253,224,71,0.85))",
+    }),
+    []
+  );
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SidebarLeft />
+      <CreatePostDialog open={openCreatePost} onOpenChange={setOpenCreatePost} />
+
+      <EditProfileDialog
+        open={openEditProfile}
+        onOpenChange={setOpenEditProfile}
+        coverStyle={coverStyle}
+      />
+
+      <SidebarLeft onCreatePost={() => setOpenCreatePost(true)} />
+
       <div className="ml-64 flex justify-center">
         <div className="flex w-full">
           <main className="min-w-0 flex-1 border-x border-zinc-800">
-            <Outlet />
+            <Outlet
+              context={{
+                openCreatePost: () => setOpenCreatePost(true),
+                openEditProfile: () => setOpenEditProfile(true),
+              }}
+            />
           </main>
+
           <aside className="hidden w-[360px] border-l border-zinc-800 lg:block">
-            <SidebarRight />
+            <SidebarRight onEditProfile={() => setOpenEditProfile(true)} />
           </aside>
         </div>
       </div>

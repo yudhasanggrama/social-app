@@ -8,6 +8,6 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.post("/likes/toggle", LikeController.toggle);
-router.post("/follow/toggle", FollowingController.toggle);
+// router.post("/follow/toggle", FollowingController.toggle);
 
 export default router;

@@ -3,56 +3,57 @@ import type { AuthRequest } from "../middleware/authMiddleware";
 import type { FollowQueryType, UserDbModel, UserResponse } from "../types/followType";
 import { getFollowListService, followUserService, unfollowUserService, isFollowingService, getSuggestedUsersService } from "../services/following";
 import { io } from "../app";
+import { prisma } from "../prisma/client";
 
-export async function toggle(req: AuthRequest, res: Response) {
-  try {
-    const userId = req.user!.id;
+// export async function toggle(req: AuthRequest, res: Response) {
+//   try {
+//     const userId = req.user!.id;
 
-    // fleksibel: kalau FE kamu kirim target_user_id atau followed_user_id
-    const targetUserId = Number(req.body?.target_user_id ?? req.body?.followed_user_id);
+//     // fleksibel: kalau FE kamu kirim target_user_id atau followed_user_id
+//     const targetUserId = Number(req.body?.target_user_id ?? req.body?.followed_user_id);
 
-    if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-      return res.status(400).json({
-        status: "error",
-        message: "target_user_id (atau followed_user_id) must be a positive integer.",
-      });
-    }
+//     if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "target_user_id (atau followed_user_id) must be a positive integer.",
+//       });
+//     }
 
-    if (targetUserId === userId) {
-      return res.status(400).json({ status: "error", message: "You cannot follow yourself." });
-    }
+//     if (targetUserId === userId) {
+//       return res.status(400).json({ status: "error", message: "You cannot follow yourself." });
+//     }
 
-    // cek status follow sekarang
-    const { isFollowing } = await isFollowingService({ userId, targetUserId });
+//     // cek status follow sekarang
+//     const { isFollowing } = await isFollowingService({ userId, targetUserId });
 
-    if (isFollowing) {
-      await unfollowUserService({ userId, targetUserId });
+//     if (isFollowing) {
+//       await unfollowUserService({ userId, targetUserId });
 
-      return res.json({
-        status: "success",
-        message: "You have successfully unfollowed the user.",
-        data: { user_id: String(targetUserId), is_following: false },
-      });
-    }
+//       return res.json({
+//         status: "success",
+//         message: "You have successfully unfollowed the user.",
+//         data: { user_id: String(targetUserId), is_following: false },
+//       });
+//     }
 
-    const result = await followUserService({ userId, targetUserId });
+//     const result = await followUserService({ userId, targetUserId });
 
-    if (!result.success && result.reason === "USER_NOT_FOUND") {
-      return res.status(404).json({ status: "error", message: "User not found." });
-    }
+//     if (!result.success && result.reason === "USER_NOT_FOUND") {
+//       return res.status(404).json({ status: "error", message: "User not found." });
+//     }
 
-    return res.json({
-      status: "success",
-      message: "You have successfully followed the user.",
-      data: { user_id: String(targetUserId), is_following: true },
-    });
-  } catch {
-    return res.status(500).json({
-      status: "error",
-      message: "Failed to toggle follow status. Please try again later.",
-    });
-  }
-}
+//     return res.json({
+//       status: "success",
+//       message: "You have successfully followed the user.",
+//       data: { user_id: String(targetUserId), is_following: true },
+//     });
+//   } catch {
+//     return res.status(500).json({
+//       status: "error",
+//       message: "Failed to toggle follow status. Please try again later.",
+//     });
+//   }
+// }
 
 
 export async function getFollows(req: AuthRequest, res: Response) {
@@ -102,17 +103,39 @@ export async function followUser(req: AuthRequest, res: Response) {
     if (!result.success && result.reason === "USER_NOT_FOUND") {
       return res.status(404).json({ status: "error", message: "User not found." });
     }
-    
+
+    // ✅ ambil data FOLLOWER (aku)
+    const follower = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        full_name: true,
+        photo_profile: true,
+      },
+    });
+
+    const followerUser = follower && {
+      id: String(follower.id),
+      username: follower.username,
+      name: follower.full_name,
+      avatar: follower.photo_profile ?? "",
+    };
+
     io.to(`user:${userId}`).emit("follow:changed", {
       followerId: userId,
       targetUserId,
       isFollowing: true,
+      followerUser,
     });
+
     io.to(`user:${targetUserId}`).emit("follow:changed", {
       followerId: userId,
       targetUserId,
       isFollowing: true,
+      followerUser,
     });
+
     return res.json({
       status: "success",
       message: "You have successfully followed the user.",
@@ -126,30 +149,54 @@ export async function followUser(req: AuthRequest, res: Response) {
   }
 }
 
+
 export async function unfollowUser(req: AuthRequest, res: Response) {
   try {
     const userId = req.user!.id;
-    const targetUserId = Number(req.body?.followed_id);
+    const targetUserId = Number(req.body?.followed_user_id ?? req.body?.followed_id);
 
     if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-      return res.status(400).json({ status: "error", message: "followed_id must be a positive integer." });
+      return res.status(400).json({
+        status: "error",
+        message: "followed_user_id must be a positive integer.",
+      });
     }
 
     if (targetUserId === userId) {
-      return res.status(400).json({ status: "error", message: "Invalid followed_id." });
+      return res.status(400).json({ status: "error", message: "Invalid target user id." });
     }
 
     await unfollowUserService({ userId, targetUserId });
+
+    const follower = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        full_name: true,
+        photo_profile: true,
+      },
+    });
+
+    const followerUser = follower && {
+      id: String(follower.id),
+      username: follower.username,
+      name: follower.full_name,
+      avatar: follower.photo_profile ?? "",
+    };
 
     io.to(`user:${userId}`).emit("follow:changed", {
       followerId: userId,
       targetUserId,
       isFollowing: false,
+      followerUser,
     });
+
     io.to(`user:${targetUserId}`).emit("follow:changed", {
       followerId: userId,
       targetUserId,
       isFollowing: false,
+      followerUser,
     });
 
     return res.json({
@@ -164,6 +211,8 @@ export async function unfollowUser(req: AuthRequest, res: Response) {
     });
   }
 }
+
+
 
 function toUserResponse(u: UserDbModel): UserResponse {
   return {

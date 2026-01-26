@@ -13,9 +13,10 @@ import { FlashMessageProvider } from "./contexts/FlashProvider"
 import ThreadDetailPage from "./pages/ThreadDetailPage"
 import { fetchProfile } from "./store/profile"
 import { logout } from "./store"
-import ProfilePage from "./pages/ProfilePage"
 import AppLayout from "./components/layouts/AppLayout"
 import FollowPage from "./pages/FollowPage"
+import SearchPage from "./pages/SearchPage"
+import MyProfilePage from "./pages/MyProfilePage"
 
 
 
@@ -57,7 +58,8 @@ const dispatch = useDispatch<AppDispatch>()
         <Route path="/" element={<Home />} />
         <Route path="/thread/:id" element={<ThreadDetailPage />} />
         <Route path="/follow" element={<FollowPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile" element={<MyProfilePage />} />
+        <Route path="/search" element={<SearchPage />} />
       </Route>
     </Route>
   </Routes>

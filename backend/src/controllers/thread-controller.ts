@@ -15,7 +15,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     const thread = await createThread(req.user!.id, content, images);
 
-    io.emit("thread:created", thread);
+    io.to("feed").emit("thread:created", thread);
 
     return res.status(201).json({ success: true, thread });
   } catch (err) {

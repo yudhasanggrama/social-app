@@ -8,25 +8,16 @@ import {
   selectFollowers,
   selectFollowing,
 } from "@/store/follow";
-import { selectMe } from "@/store/profile";
+import { selectAvatarVersion, selectMe } from "@/store/profile";
+import { avatarImgSrc } from "@/lib/image";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type Tab = "followers" | "following";
 
-function Avatar({ src, name }: { src?: string; name: string }) {
-  return (
-    <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden flex items-center justify-center">
-      {src ? (
-        <img src={src} alt={name} className="w-full h-full object-cover" />
-      ) : (
-        <span className="text-sm">{(name?.[0] ?? "U").toUpperCase()}</span>
-      )}
-    </div>
-  );
-}
-
-export default function FollowsPage() {
+export default function FollowPage() {
   const dispatch = useDispatch<AppDispatch>();
   const me = useSelector(selectMe);
+  const avatarVersion = useSelector(selectAvatarVersion);
 
   const [tab, setTab] = useState<Tab>("followers");
 
@@ -35,9 +26,9 @@ export default function FollowsPage() {
 
   useEffect(() => {
     if (!me?.id) return;
-
-    if (tab === "followers") dispatch(fetchFollowersThunk());
-    else dispatch(fetchFollowingThunk());
+    tab === "followers"
+      ? dispatch(fetchFollowersThunk())
+      : dispatch(fetchFollowingThunk());
   }, [dispatch, tab, me?.id]);
 
   const list = useMemo(
@@ -45,65 +36,98 @@ export default function FollowsPage() {
     [tab, followers, following]
   );
 
+  // ✅ local list supaya unfollow langsung hilang dari UI tanpa nunggu fetch
+  const [localList, setLocalList] = useState<any[]>([]);
+  useEffect(() => setLocalList(list as any[]), [list]);
+
   return (
     <div className="p-6">
-      <div className="">
-        <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-4">
-          <div className="font-semibold mb-4">Follows</div>
+      <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-4">
+        <div className="font-semibold mb-4">Follows</div>
 
-          <div className="grid grid-cols-2 border-b border-zinc-800 mb-4">
-            <button
-              className={`pb-3 text-sm text-center ${
-                tab === "followers"
-                  ? "border-b-2 border-green-500 text-white"
-                  : "text-zinc-400"
-              }`}
-              onClick={() => setTab("followers")}
-            >
-              Followers
-            </button>
+        <div className="grid grid-cols-2 border-b border-zinc-800 mb-4">
+          <button
+            onClick={() => setTab("followers")}
+            className={`pb-3 text-sm ${
+              tab === "followers"
+                ? "border-b-2 border-green-500 text-white"
+                : "text-zinc-400"
+            }`}
+          >
+            Followers
+          </button>
+          <button
+            onClick={() => setTab("following")}
+            className={`pb-3 text-sm ${
+              tab === "following"
+                ? "border-b-2 border-green-500 text-white"
+                : "text-zinc-400"
+            }`}
+          >
+            Following
+          </button>
+        </div>
 
-            <button
-              className={`pb-3 text-sm text-center ${
-                tab === "following"
-                  ? "border-b-2 border-green-500 text-white"
-                  : "text-zinc-400"
-              }`}
-              onClick={() => setTab("following")}
-            >
-              Following
-            </button>
-          </div>
+        {!me?.id ? (
+          <div className="text-sm text-zinc-500">Login dulu untuk melihat data.</div>
+        ) : (
+          <div className="space-y-3">
+            {localList.map((u: any) => {
+              const img = avatarImgSrc(u.avatar, avatarVersion);
+              const fallback = (u.name?.[0] ?? "U").toUpperCase();
 
+              const isFollowing =
+                tab === "following" ? true : (u.is_following ?? false);
 
-
-
-          {!me?.id ? (
-            <div className="text-sm text-zinc-500">Login dulu untuk melihat data.</div>
-          ) : (
-            <div className="space-y-3">
-              {list.map((u) => (
+              return (
                 <div key={u.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
-                    <Avatar src={u.avatar} name={u.name} />
+                    <div className="h-10 w-10 rounded-full overflow-hidden bg-zinc-800 flex items-center justify-center shrink-0">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage
+                          src={avatarImgSrc(u.avatar, avatarVersion)}
+                          alt={u.name}
+                        />
+                        <AvatarFallback>{(u.name?.[0] ?? "U").toUpperCase()}</AvatarFallback>
+                      </Avatar>
+
+                      {!img && <span className="text-sm text-white">{fallback}</span>}
+                    </div>
+
                     <div className="min-w-0">
                       <div className="font-medium truncate">{u.name}</div>
-                      <div className="text-sm text-zinc-400 truncate">
-                        @{u.username}
-                      </div>
+                      <div className="text-sm text-zinc-400 truncate">@{u.username}</div>
                     </div>
                   </div>
 
-                  <FollowButton userId={u.id} isFollowing={false} />
-                </div>
-              ))}
+                  <FollowButton
+                    userId={u.id}
+                    isFollowing={isFollowing}
+                    onToggle={(next) => {
+                      // ✅ kalau di tab following dan next=false => remove dari list
+                      if (tab === "following" && !next) {
+                        setLocalList((prev) => prev.filter((x) => x.id !== u.id));
+                      }
 
-              {list.length === 0 && (
-                <div className="text-sm text-zinc-500">No data.</div>
-              )}
-            </div>
-          )}
-        </div>
+                      // ✅ kalau di followers tab, cukup patch flag lokal
+                      if (tab === "followers") {
+                        setLocalList((prev) =>
+                          prev.map((x) =>
+                            x.id === u.id ? { ...x, is_following: next } : x
+                          )
+                        );
+                      }
+                    }}
+                  />
+                </div>
+              );
+            })}
+
+            {localList.length === 0 && (
+              <div className="text-sm text-zinc-500">No data.</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

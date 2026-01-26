@@ -11,4 +11,5 @@ router.post("/follows", FollowingController.followUser);
 router.delete("/follows", FollowingController.unfollowUser);
 router.get("/follows/suggested", FollowingController.getSuggested);
 
+
 export default router;

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { ArrowLeft, Camera, X } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import api from "@/lib/api";
 import type { AppDispatch } from "@/store/types";
@@ -18,12 +18,8 @@ import { socket } from "@/lib/socket";
 import { avatarImgSrc, publicUrl } from "@/lib/image";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
-
-type EditForm = {
-  name: string;
-  username: string;
-  bio: string;
-};
+// ✅ NEW: dialog component hasil extract
+import EditProfileDialog from "@/components/profile/EditProfileDialog";
 
 type LikeUpdatedPayload = {
   threadId: number | string;
@@ -51,29 +47,23 @@ export default function ProfilePage() {
 
   const me = useSelector(selectMe);
   const profileStatus = useSelector(selectProfileFetchStatus);
+  const v = useSelector(selectAvatarVersion);
 
   const [tab, setTab] = useState<"posts" | "media">("posts");
+
+  // ✅ modal open state tetap di sini (lebih minimal)
   const [openEdit, setOpenEdit] = useState(false);
 
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
 
-  const [form, setForm] = useState<EditForm>({
-    name: "",
-    username: "",
-    bio: "",
-  });
-
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string>(
-    avatarImgSrc(me?.avatar)
-  );
   const displayName = me?.name ?? "Guest";
   const fallback = (displayName?.[0] ?? "U").toUpperCase();
-  const v = useSelector(selectAvatarVersion);
-  const src = me?.avatar ? avatarImgSrc(me.avatar, v) : "https://github.com/shadcn.png";
+  const src = me?.avatar
+    ? avatarImgSrc(me.avatar, v)
+    : "https://github.com/shadcn.png";
 
+  // fetch profile jika belum ada
   useEffect(() => {
     if (!me && profileStatus !== "loading") {
       dispatch(fetchProfile());
@@ -107,20 +97,8 @@ export default function ProfilePage() {
 
     run();
   }, [dispatch]);
-  
-  useEffect(() => {
-    if (!openEdit) return;
 
-    setForm({
-      name: me?.name ?? "",
-      username: me?.username ?? "",
-      bio: me?.bio ?? "",
-    });
-
-    setAvatarFile(null);
-    setAvatarPreview(avatarImgSrc(me?.avatar));
-  }, [openEdit, me]);
-
+  // socket sync
   useEffect(() => {
     if (!me?.id) return;
 
@@ -159,9 +137,7 @@ export default function ProfilePage() {
       if (!t?.id) return;
 
       setThreads((prev) =>
-        prev.map((x: any) =>
-          Number(x.id) === Number(t.id) ? { ...x, ...t } : x
-        )
+        prev.map((x: any) => (Number(x.id) === Number(t.id) ? { ...x, ...t } : x))
       );
 
       if (t?.likes !== undefined || t?.isLiked !== undefined) {
@@ -178,9 +154,7 @@ export default function ProfilePage() {
     const onThreadDeleted = (payload: any) => {
       const threadId = payload?.threadId ?? payload?.id ?? payload;
       if (threadId == null) return;
-      setThreads((prev) =>
-        prev.filter((x: any) => Number(x.id) !== Number(threadId))
-      );
+      setThreads((prev) => prev.filter((x: any) => Number(x.id) !== Number(threadId)));
     };
 
     const onLikeUpdated = (payload: LikeUpdatedPayload) => {
@@ -251,49 +225,6 @@ export default function ProfilePage() {
       "linear-gradient(90deg, rgba(74,222,128,0.85), rgba(253,224,71,0.85))",
   };
 
-  const handleSaveProfile = async () => {
-    try {
-      const fd = new FormData();
-      fd.append("name", form.name);
-      fd.append("username", form.username);
-      fd.append("bio", form.bio);
-      if (avatarFile) fd.append("avatar", avatarFile);
-
-      const res = await api.patch("/profile", fd, {
-        withCredentials: true,
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      const updated =
-        res.data?.data?.profile ??
-        res.data?.data?.user ??
-        res.data?.data ??
-        res.data?.profile ??
-        res.data?.user ??
-        res.data;
-
-      const newAvatar: string | undefined = updated?.avatar;
-
-      dispatch(fetchProfile());
-
-      if (newAvatar) {
-        setThreads((prev) =>
-          prev.map((t: any) => ({
-            ...t,
-            user: t.user ? { ...t.user, avatar: newAvatar } : t.user,
-            User: t.User ? { ...t.User, avatar: newAvatar } : t.User,
-          }))
-        );
-      }
-
-      setOpenEdit(false);
-    } catch (e) {
-      console.error(e);
-      alert("Gagal update profile");
-    }
-  };
-
-
   return (
     <div className="min-h-screen bg-black text-white">
       {/* HEADER */}
@@ -356,29 +287,21 @@ export default function ProfilePage() {
             <button
               onClick={() => setTab("posts")}
               className={`flex-1 py-3 text-sm ${
-                tab === "posts"
-                  ? "text-white"
-                  : "text-zinc-400 hover:text-white"
+                tab === "posts" ? "text-white" : "text-zinc-400 hover:text-white"
               }`}
             >
               <div className="mx-auto w-fit">All Post</div>
-              {tab === "posts" && (
-                <div className="mx-auto mt-2 h-[2px] w-40 bg-green-500" />
-              )}
+              {tab === "posts" && <div className="mx-auto mt-2 h-[2px] w-40 bg-green-500" />}
             </button>
 
             <button
               onClick={() => setTab("media")}
               className={`flex-1 py-3 text-sm ${
-                tab === "media"
-                  ? "text-white"
-                  : "text-zinc-400 hover:text-white"
+                tab === "media" ? "text-white" : "text-zinc-400 hover:text-white"
               }`}
             >
               <div className="mx-auto w-fit">Media</div>
-              {tab === "media" && (
-                <div className="mx-auto mt-2 h-[2px] w-40 bg-green-500" />
-              )}
+              {tab === "media" && <div className="mx-auto mt-2 h-[2px] w-40 bg-green-500" />}
             </button>
           </div>
         </div>
@@ -386,6 +309,7 @@ export default function ProfilePage() {
         {/* tab content */}
         {tab === "posts" ? (
           <div className="pt-4">
+            {/* skeleton loading */}
             {loadingThreads ? (
               <div className="space-y-4 px-2">
                 {[1, 2, 3].map((i) => (
@@ -405,9 +329,7 @@ export default function ProfilePage() {
                   <PostRow key={(t as any).id} thread={t} />
                 ))}
                 {threads.length === 0 && (
-                  <div className="px-2 py-8 text-sm text-zinc-400">
-                    Belum ada post.
-                  </div>
+                  <div className="px-2 py-8 text-sm text-zinc-400">Belum ada post.</div>
                 )}
               </div>
             )}
@@ -427,11 +349,7 @@ export default function ProfilePage() {
                     key={`${src}-${i}`}
                     className="overflow-hidden rounded-xl border border-zinc-800"
                   >
-                    <img
-                      src={src}
-                      alt={`media-${i}`}
-                      className="aspect-square w-full object-cover"
-                    />
+                    <img src={src} alt={`media-${i}`} className="aspect-square w-full object-cover" />
                   </div>
                 ))}
 
@@ -446,107 +364,21 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* EDIT MODAL */}
-      {openEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-[560px] rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl">
-            <div className="flex items-center justify-between px-5 py-4">
-              <div className="text-lg font-semibold">Edit profile</div>
-              <button
-                onClick={() => setOpenEdit(false)}
-                className="rounded-full p-2 hover:bg-zinc-900"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="px-5 pb-5">
-              <div
-                className="h-28 w-full rounded-2xl border border-zinc-800"
-                style={coverStyle}
-              />
-
-              <div className="-mt-8 relative w-fit">
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="group relative"
-                  title="Ganti foto profil"
-                >
-                  <img
-                    src={avatarPreview}
-                    className="h-16 w-16 rounded-full border-4 border-zinc-950 object-cover"
-                  />
-                  <div className="absolute inset-0 rounded-full bg-black/40" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Camera className="h-5 w-5 text-white" />
-                  </div>
-                </button>
-
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setAvatarFile(file);
-                    setAvatarPreview(URL.createObjectURL(file));
-                  }}
-                />
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <div>
-                  <label className="mb-1 block text-xs text-zinc-400">Name</label>
-                  <input
-                    value={form.name}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, name: e.target.value }))
-                    }
-                    className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs text-zinc-400">
-                    Username
-                  </label>
-                  <input
-                    value={form.username}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, username: e.target.value }))
-                    }
-                    className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs text-zinc-400">Bio</label>
-                  <textarea
-                    value={form.bio}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, bio: e.target.value }))
-                    }
-                    rows={4}
-                    className="w-full resize-none rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-600"
-                  />
-                </div>
-
-                <div className="flex justify-end pt-2">
-                  <button
-                    className="rounded-full bg-green-500 px-6 py-2 text-sm font-semibold text-black hover:bg-green-600"
-                    onClick={handleSaveProfile}
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <EditProfileDialog
+        open={openEdit}
+        onOpenChange={setOpenEdit}
+        coverStyle={coverStyle}
+        onAvatarUpdated={(newAvatar) => {
+          // sync avatar ke thread list di page ini (biar UI langsung berubah)
+          setThreads((prev) =>
+            prev.map((t: any) => ({
+              ...t,
+              user: t.user ? { ...t.user, avatar: newAvatar } : t.user,
+              User: t.User ? { ...t.User, avatar: newAvatar } : t.User,
+            }))
+          );
+        }}
+      />
     </div>
   );
 }

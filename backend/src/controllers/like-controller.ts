@@ -11,7 +11,7 @@ export const toggle = async (req: AuthRequest, res: Response) => {
 
     res.status(200).json({ result });
 
-    io.emit("thread:like_updated", {
+    io.to("feed").emit("thread:like_updated", {
       threadId: result.threadId,
       likesCount: result.likesCount,
       actorUserId: req.user!.id,

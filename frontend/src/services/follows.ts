@@ -14,6 +14,7 @@ export const followsApi = {
   follow: async (followed_user_id: number) =>
     (await api.post<FollowActionRes>("/follows", { followed_user_id })).data,
 
-  unfollow: async (followed_id: number) =>
-    (await api.delete<FollowActionRes>("/follows", { data: { followed_id } })).data,
+  unfollow: async (followed_user_id: number) =>
+    (await api.delete<FollowActionRes>("/follows", { data: { followed_user_id } })).data,
+
 };

@@ -3,7 +3,7 @@ export type FollowUserItem = {
   username: string;
   name: string;
   avatar: string;
-  is_following?: boolean;
+  is_following: boolean;
 };
 
 export type ApiSuccess<T> = { status: "success"; data: T };

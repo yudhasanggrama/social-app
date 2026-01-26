@@ -19,7 +19,7 @@ import { resetAll } from "@/store/index";
 import { socket } from "@/lib/socket";
 
 
-const SidebarLeft = () => {
+const SidebarLeft = ({onCreatePost}: { onCreatePost: () => void;}) => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
@@ -69,7 +69,7 @@ const SidebarLeft = () => {
       </div>
 
       <div className="flex-1 px-2">
-        <SidebarNav />
+          <SidebarNav onCreatePost={onCreatePost} />
       </div>
 
       <div className="border-t border-zinc-800 p-4">

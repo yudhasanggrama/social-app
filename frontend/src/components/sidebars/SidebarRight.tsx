@@ -21,7 +21,7 @@ import { fetchSuggestedThunk, selectSuggested } from "@/store/follow";
 import FollowButton from "@/components/FollowButton";
 import { avatarImgSrc } from "@/lib/image";
 
-const SidebarRight = () => {
+const SidebarRight = ({onEditProfile} : {onEditProfile: () => void}) => {
   const dispatch = useDispatch<AppDispatch>();
 
   const me = useSelector(selectMe);
@@ -41,7 +41,6 @@ const SidebarRight = () => {
     }
   }, [dispatch, me, fetchStatus]);
 
-  // ✅ suggested: hanya fetch kalau sudah login
   useEffect(() => {
     if (!me?.id) return;
     dispatch(fetchSuggestedThunk(5));
@@ -50,7 +49,7 @@ const SidebarRight = () => {
   const displayName = me?.name ?? "Guest";
   const displayUsername = me?.username ? `@${me.username}` : "@guest";
   const avatarSrc = avatarImgSrc(me?.avatar, v);
-  const fallback = (displayName?.[0] ?? "U").toUpperCase();
+  const fallback = (displayName?.[0] ?? "").toUpperCase();
   const bio = me?.bio ?? "Login untuk melihat profil";
 
   const following = me?.following_count ?? 0;
@@ -72,6 +71,7 @@ const SidebarRight = () => {
             </Avatar>
 
             <Button
+              onClick={onEditProfile}
               variant="whiteOutline"
               className="rounded-full border border-white px-4 py-1 text-sm mt-10"
               disabled={loading || !me}
@@ -131,8 +131,7 @@ const SidebarRight = () => {
                     <p className="text-zinc-400">@{u.username}</p>
                   </div>
                 </div>
-
-                <FollowButton userId={u.id} isFollowing={false} />
+                <FollowButton userId={u.id} isFollowing={u.is_following ?? false} />
               </div>
             ))
           )}

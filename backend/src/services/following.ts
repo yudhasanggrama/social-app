@@ -28,11 +28,10 @@ function toUserResponse(u: UserDbModel): UserResponse {
 
 export async function getFollowListService(
   input: GetFollowListInput
-): Promise<{ followers: UserResponse[] | FollowerResponse[] }> {
+): Promise<{ followers: FollowerResponse[] }> {
   const { userId, type } = input;
 
   if (type === "followers") {
-    // orang yang follow aku
     const rows = await prisma.following.findMany({
       where: { following_id: userId },
       select: {
@@ -51,7 +50,6 @@ export async function getFollowListService(
     const followerUsers = rows.map((r) => r.follower);
     const followerIds = followerUsers.map((u) => u.id);
 
-    // cek apakah aku follow balik mereka
     const iFollowBack = await prisma.following.findMany({
       where: { follower_id: userId, following_id: { in: followerIds } },
       select: { following_id: true },
@@ -60,7 +58,7 @@ export async function getFollowListService(
     const followedSet = new Set(iFollowBack.map((x) => x.following_id));
 
     const followers: FollowerResponse[] = followerUsers.map((u) => ({
-      ...toUserResponse(u),
+      ...toUserResponse(u as any),
       is_following: followedSet.has(u.id),
     }));
 
@@ -83,10 +81,14 @@ export async function getFollowListService(
     orderBy: { created_at: "desc" },
   });
 
-  // sesuai response kamu: key "followers"
-  const followers: UserResponse[] = rows.map((r) => toUserResponse(r.following));
+  const followers: FollowerResponse[] = rows.map((r) => ({
+    ...toUserResponse(r.following as any),
+    is_following: true, // karena ini daftar yang kamu follow
+  }));
+
   return { followers };
 }
+
 
 export async function followUserService(input: FollowUserInput): Promise<FollowActionResult> {
   const { userId, targetUserId } = input;

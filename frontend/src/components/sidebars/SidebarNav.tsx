@@ -9,7 +9,7 @@ const menuItems = [
   { label: "Profile", icon: User, to: "/profile" },
 ];
 
-export function SidebarNav() {
+export function SidebarNav({ onCreatePost }: { onCreatePost: () => void }) {
   return (
     <nav className="space-y-1">
       {menuItems.map((item) => (
@@ -30,7 +30,10 @@ export function SidebarNav() {
         </NavLink>
       ))}
 
-      <Button className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-green-500 py-3 text-sm font-semibold hover:bg-green-600">
+      <Button
+        onClick={onCreatePost}
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-green-500 py-3 text-sm font-semibold hover:bg-green-600"
+      >
         <Plus className="h-4 w-4" />
         Create Post
       </Button>
