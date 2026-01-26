@@ -2,18 +2,14 @@ import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "@/store/types";
 import { socket } from "@/lib/socket";
-import {
-  fetchFollowersThunk,
-  fetchFollowingThunk,
-  fetchSuggestedThunk,
-  followChanged,
-} from "@/store/follow";
+import { followChanged } from "@/store/follow";
+import { profileFollowCountChanged } from "@/store/profile";
 
 export function useFollowSocket() {
   const dispatch = useDispatch<AppDispatch>();
   const myId = useSelector((s: RootState) => s.auth.id);
 
-  // ✅ connect socket setelah login
+  // connect socket setelah login
   useEffect(() => {
     if (!myId) return;
 
@@ -28,25 +24,24 @@ export function useFollowSocket() {
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
-      if (socket.connected) socket.disconnect();
     };
   }, [myId]);
 
-  // ✅ listen follow:changed + update store + refresh lists (optional)
+  // listen follow:changed + patch store
   useEffect(() => {
     if (!myId) return;
 
     const handler = (payload: {
-      followerId: any;
-      targetUserId: any;
+      followerId: number;
+      targetUserId: number;
       isFollowing: boolean;
+      followerUser?: { id: string; username: string; name: string; avatar: string };
     }) => {
-      dispatch(followChanged(payload as any));
+      // 1) update counts untuk MyProfilePage & SidebarRight
+      dispatch(profileFollowCountChanged({ myId, ...payload }));
 
-      // refresh biar suggested/followers selalu akurat
-      dispatch(fetchFollowersThunk());
-      dispatch(fetchFollowingThunk());
-      dispatch(fetchSuggestedThunk(5));
+      // 2) update followers/following/suggested lists
+      dispatch(followChanged({ myId, ...payload }));
     };
 
     socket.on("follow:changed", handler);

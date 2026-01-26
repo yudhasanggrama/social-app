@@ -68,15 +68,20 @@ export const toggleLike = async (req: AuthRequest, res: Response) => {
     }
 
     const result = await toggleReplyLike(replyId, userId);
-    // result: { replyId, threadId, likesCount, liked }
 
-    // ✅ broadcast ke semua client (atau bisa ke room thread)
+    // 1) broadcast count ke semua
     io.emit("reply:like_updated", {
       replyId: result.replyId,
       threadId: result.threadId,
       likesCount: result.likesCount,
-      actorUserId: userId,
-      liked: result.liked,
+    });
+
+    // 2) private: status liked untuk actor
+    io.to(`user:${userId}`).emit("reply:like_updated", {
+      replyId: result.replyId,
+      threadId: result.threadId,
+      likesCount: result.likesCount,
+      isLiked: result.liked,
     });
 
     return res.status(200).json({

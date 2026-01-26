@@ -1,4 +1,4 @@
-import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import { createAction, createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import type { RootState } from "@/store/index";
 import api from "@/lib/api";
 import { resetAll } from "@/store/index";
@@ -29,32 +29,44 @@ const initialState: ProfileState = {
   avatarVersion: 0,
 };
 
-export const fetchProfile = createAsyncThunk<
-  Profile,
-  void,
-  { rejectValue: string }
->("profile/fetchProfile", async (_, { rejectWithValue }) => {
-  try {
-    const { data } = await api.get("/profile"); // ✅ sesuaikan endpoint kamu
-    // contoh shape: { status:"success", data:{ profile: {...}} }
-    const p = data?.data?.profile ?? data?.data?.user ?? data?.data ?? data?.profile;
-    if (!p) return rejectWithValue("Profile not found");
+export const fetchProfile = createAsyncThunk<Profile, void, { rejectValue: string }>(
+  "profile/fetchProfile",
+  async (_, { rejectWithValue }) => {
+    try {
+      const { data } = await api.get("/profile");
+      const p = data?.data?.profile ?? data?.data?.user ?? data?.data ?? data?.profile;
+      if (!p) return rejectWithValue("Profile not found");
 
-    const mapped: Profile = {
-      id: Number(p.id),
-      username: p.username,
-      name: p.name ?? p.full_name ?? p.fullName ?? "",
-      avatar: p.avatar ?? p.photo_profile ?? "",
-      bio: p.bio ?? "",
-      follower_count: p.follower_count ?? p.followerCount ?? 0,
-      following_count: p.following_count ?? p.followingCount ?? 0,
-    };
+      const mapped: Profile = {
+        id: Number(p.id),
+        username: p.username,
+        name: p.name ?? p.full_name ?? p.fullName ?? "",
+        avatar: p.avatar ?? p.photo_profile ?? "",
+        bio: p.bio ?? "",
+        follower_count: p.follower_count ?? p.followerCount ?? 0,
+        following_count: p.following_count ?? p.followingCount ?? 0,
+      };
 
-    return mapped;
-  } catch (e: any) {
-    return rejectWithValue(e?.response?.data?.message ?? "Failed to fetch profile");
+      return mapped;
+    } catch (e: any) {
+      return rejectWithValue(e?.response?.data?.message ?? "Failed to fetch profile");
+    }
   }
-});
+);
+
+// ===== realtime count action (dipanggil dari socket) =====
+export type ProfileFollowCountChangedPayload = {
+  myId: number;
+  followerId: number;
+  targetUserId: number;
+  isFollowing: boolean;
+};
+
+export const profileFollowCountChanged = createAction<ProfileFollowCountChangedPayload>(
+  "profile/followCountChanged"
+);
+
+const inc = (n: number | undefined, d: number) => Math.max(0, (n ?? 0) + d);
 
 const slice = createSlice({
   name: "profile",
@@ -69,8 +81,6 @@ const slice = createSlice({
       .addCase(fetchProfile.fulfilled, (s, a) => {
         s.fetchStatus = "succeeded";
         s.me = a.payload;
-
-        // ✅ penting: paksa avatar reload setelah login / switch account
         s.avatarVersion += 1;
       })
       .addCase(fetchProfile.rejected, (s, a) => {
@@ -79,7 +89,26 @@ const slice = createSlice({
         s.me = null;
       })
 
-      // ✅ reset saat logout
+      // ✅ realtime update follower_count/following_count (MyProfile & SidebarRight)
+      .addCase(profileFollowCountChanged, (s, a) => {
+        if (!s.me) return;
+
+        const { myId, followerId, targetUserId, isFollowing } = a.payload;
+        if (s.me.id !== myId) return;
+
+        const delta = isFollowing ? 1 : -1;
+
+        // aku follow/unfollow orang -> following_count berubah
+        if (myId === followerId) {
+          s.me.following_count = inc(s.me.following_count, delta);
+        }
+
+        // orang follow/unfollow aku -> follower_count berubah
+        if (myId === targetUserId) {
+          s.me.follower_count = inc(s.me.follower_count, delta);
+        }
+      })
+
       .addCase(resetAll, () => initialState);
   },
 });

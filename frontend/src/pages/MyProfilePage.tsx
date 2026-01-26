@@ -17,23 +17,20 @@ import type { Thread } from "@/Types/thread";
 import { socket } from "@/lib/socket";
 import { avatarImgSrc, publicUrl } from "@/lib/image";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-
-// ✅ NEW: dialog component hasil extract
 import EditProfileDialog from "@/components/profile/EditProfileDialog";
 
 type LikeUpdatedPayload = {
-  threadId: number | string;
+  threadId?: number | string;
+  id?: number | string;
   likes?: number | string;
   likesCount?: number | string;
-  userId?: number | string;
-  isLiked?: boolean;
-  action?: "like" | "unlike";
+  isLiked?: boolean; // private only
 };
 
 const normalizeImages = (t: any): string[] => {
-  if (Array.isArray(t?.image)) return t.image;
-  if (Array.isArray(t?.images)) return t.images;
-  if (typeof t?.image === "string" && t.image.length > 0) return [t.image];
+  const img = t?.image ?? t?.images;
+  if (Array.isArray(img)) return img.filter(Boolean);
+  if (typeof img === "string" && img.trim() !== "") return [img];
   return [];
 };
 
@@ -42,7 +39,7 @@ const toNumber = (v: any, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-export default function ProfilePage() {
+export default function MyProfilePage() {
   const dispatch = useDispatch<AppDispatch>();
 
   const me = useSelector(selectMe);
@@ -50,8 +47,6 @@ export default function ProfilePage() {
   const v = useSelector(selectAvatarVersion);
 
   const [tab, setTab] = useState<"posts" | "media">("posts");
-
-  // ✅ modal open state tetap di sini (lebih minimal)
   const [openEdit, setOpenEdit] = useState(false);
 
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -59,9 +54,7 @@ export default function ProfilePage() {
 
   const displayName = me?.name ?? "Guest";
   const fallback = (displayName?.[0] ?? "U").toUpperCase();
-  const src = me?.avatar
-    ? avatarImgSrc(me.avatar, v)
-    : "https://github.com/shadcn.png";
+  const src = me?.avatar ? avatarImgSrc(me.avatar, v) : "https://github.com/shadcn.png";
 
   // fetch profile jika belum ada
   useEffect(() => {
@@ -79,16 +72,18 @@ export default function ProfilePage() {
         const list: Thread[] = res.data?.data?.threads ?? res.data?.threads ?? [];
         setThreads(list);
 
-        list.forEach((t) => {
+        // ✅ REST seed: isLiked + likesCount
+        list.forEach((t: any) => {
           dispatch(
             setThreadLikeFromServer({
-              threadId: Number((t as any).id),
-              isLiked: Boolean((t as any).isLiked),
-              likesCount: toNumber((t as any).likes),
+              threadId: toNumber(t.id),
+              isLiked: Boolean(t.isLiked),
+              likesCount: toNumber(t.likes ?? 0),
             })
           );
         });
-      } catch {
+      } catch (e) {
+        console.error("Failed to fetch my threads", e);
         setThreads([]);
       } finally {
         setLoadingThreads(false);
@@ -102,110 +97,41 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!me?.id) return;
 
-    if (socket && (socket as any).connected === false) {
-      try {
-        socket.connect?.();
-      } catch {}
-    }
-
-    const onThreadCreated = (payload: any) => {
-      const t = payload?.thread ?? payload;
-      if (!t) return;
-
-      const authorId = toNumber(
-        t?.userId ?? t?.authorId ?? t?.user?.id ?? t?.User?.id
-      );
-      if (authorId !== toNumber(me.id)) return;
-
-      setThreads((prev) => {
-        const exists = prev.some((x: any) => Number(x.id) === Number(t.id));
-        if (exists) return prev;
-        return [t as Thread, ...prev];
-      });
-
-      dispatch(
-        setThreadLikeFromServer({
-          threadId: Number(t.id),
-          isLiked: Boolean(t?.isLiked),
-          likesCount: toNumber(t?.likes),
-        })
-      );
-    };
-
-    const onThreadUpdated = (payload: any) => {
-      const t = payload?.thread ?? payload;
-      if (!t?.id) return;
-
-      setThreads((prev) =>
-        prev.map((x: any) => (Number(x.id) === Number(t.id) ? { ...x, ...t } : x))
-      );
-
-      if (t?.likes !== undefined || t?.isLiked !== undefined) {
-        dispatch(
-          setThreadLikeFromServer({
-            threadId: Number(t.id),
-            isLiked: Boolean(t?.isLiked),
-            likesCount: toNumber(t?.likes),
-          })
-        );
-      }
-    };
-
-    const onThreadDeleted = (payload: any) => {
-      const threadId = payload?.threadId ?? payload?.id ?? payload;
-      if (threadId == null) return;
-      setThreads((prev) => prev.filter((x: any) => Number(x.id) !== Number(threadId)));
-    };
-
     const onLikeUpdated = (payload: LikeUpdatedPayload) => {
-      const threadId = toNumber(payload?.threadId);
+      const rawThreadId = payload.threadId ?? payload.id;
+      const threadId = toNumber(rawThreadId, 0);
       if (!threadId) return;
 
       const likesCount =
-        payload?.likes !== undefined
-          ? toNumber(payload.likes)
-          : payload?.likesCount !== undefined
+        payload.likesCount !== undefined
           ? toNumber(payload.likesCount)
+          : payload.likes !== undefined
+          ? toNumber(payload.likes)
           : undefined;
 
-      const actorUserId = payload?.userId != null ? toNumber(payload.userId) : null;
-      const actorIsMe = actorUserId != null && actorUserId === toNumber(me.id);
-
+      // update list lokal
       setThreads((prev) =>
         prev.map((t: any) => {
-          if (Number(t.id) !== threadId) return t;
+          if (toNumber(t.id) !== threadId) return t;
           const next: any = { ...t };
           if (likesCount !== undefined) next.likes = likesCount;
-          if (actorIsMe && typeof payload.isLiked === "boolean") {
-            next.isLiked = payload.isLiked;
-          }
+          if (typeof payload.isLiked === "boolean") next.isLiked = payload.isLiked; // private only
           return next;
         })
       );
 
-      dispatch(
-        setThreadLikeFromServer({
-          threadId,
-          isLiked: actorIsMe ? Boolean(payload.isLiked) : false,
-          likesCount: likesCount ?? 0,
-        })
-      );
+      // ✅ socket patch: count only / isLiked only if sent
+      const patch: any = { threadId };
+      if (likesCount !== undefined) patch.likesCount = likesCount;
+      if (typeof payload.isLiked === "boolean") patch.isLiked = payload.isLiked;
+
+      dispatch(setThreadLikeFromServer(patch));
     };
 
-    socket.on("thread:created", onThreadCreated);
-    socket.on("thread:updated", onThreadUpdated);
-    socket.on("thread:deleted", onThreadDeleted);
-    socket.on("thread:likeUpdated", onLikeUpdated);
-    socket.on("thread:like", onLikeUpdated);
-    socket.on("like:updated", onLikeUpdated);
+    socket.on("thread:like_updated", onLikeUpdated);
 
     return () => {
-      socket.off("thread:created", onThreadCreated);
-      socket.off("thread:updated", onThreadUpdated);
-      socket.off("thread:deleted", onThreadDeleted);
-      socket.off("thread:likeUpdated", onLikeUpdated);
-      socket.off("thread:like", onLikeUpdated);
-      socket.off("like:updated", onLikeUpdated);
+      socket.off("thread:like_updated", onLikeUpdated);
     };
   }, [dispatch, me?.id]);
 
@@ -214,15 +140,15 @@ export default function ProfilePage() {
     for (const t of threads as any[]) {
       const imgs = normalizeImages(t)
         .map((p) => publicUrl(p))
-        .filter((x): x is string => Boolean(x));
-      all.push(...imgs);
+        .filter((x): x is string => typeof x === "string" && x.length > 0);
+
+      if (imgs.length) all.push(...imgs);
     }
     return all;
   }, [threads]);
 
   const coverStyle = {
-    background:
-      "linear-gradient(90deg, rgba(74,222,128,0.85), rgba(253,224,71,0.85))",
+    background: "linear-gradient(90deg, rgba(74,222,128,0.85), rgba(253,224,71,0.85))",
   };
 
   return (
@@ -238,13 +164,8 @@ export default function ProfilePage() {
       </div>
 
       <div className="px-4 pb-4">
-        {/* cover */}
-        <div
-          className="mt-4 h-36 w-full rounded-2xl border border-zinc-800"
-          style={coverStyle}
-        />
+        <div className="mt-4 h-36 w-full rounded-2xl border border-zinc-800" style={coverStyle} />
 
-        {/* avatar + edit */}
         <div className="-mt-10 flex items-end justify-between px-2">
           <Avatar className="h-20 w-20 border-4 border-black">
             <AvatarImage
@@ -262,11 +183,9 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* info */}
         <div className="mt-3 px-2">
           <div className="text-xl font-bold">{me?.name ?? "Guest"}</div>
           <div className="text-sm text-zinc-400">@{me?.username ?? "guest"}</div>
-
           <div className="mt-2 text-sm text-zinc-300">{me?.bio ?? ""}</div>
 
           <div className="mt-2 flex gap-4 text-sm">
@@ -281,7 +200,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* tabs */}
         <div className="mt-5 border-b border-zinc-800">
           <div className="flex">
             <button
@@ -306,10 +224,8 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* tab content */}
         {tab === "posts" ? (
           <div className="pt-4">
-            {/* skeleton loading */}
             {loadingThreads ? (
               <div className="space-y-4 px-2">
                 {[1, 2, 3].map((i) => (
@@ -325,8 +241,8 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div>
-                {threads.map((t) => (
-                  <PostRow key={(t as any).id} thread={t} />
+                {threads.map((t: any) => (
+                  <PostRow key={toNumber(t.id)} thread={t} />
                 ))}
                 {threads.length === 0 && (
                   <div className="px-2 py-8 text-sm text-zinc-400">Belum ada post.</div>
@@ -336,30 +252,21 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="pt-4">
-            {loadingThreads ? (
-              <div className="grid grid-cols-3 gap-2 px-2 pb-6">
-                {Array.from({ length: 9 }).map((_, i) => (
-                  <div key={i} className="aspect-square animate-pulse rounded-xl bg-zinc-800" />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 px-2 pb-6">
-                {mediaImages.map((src, i) => (
-                  <div
-                    key={`${src}-${i}`}
-                    className="overflow-hidden rounded-xl border border-zinc-800"
-                  >
-                    <img src={src} alt={`media-${i}`} className="aspect-square w-full object-cover" />
-                  </div>
-                ))}
-
-                {mediaImages.length === 0 && (
-                  <div className="col-span-3 py-10 text-center text-sm text-zinc-400">
-                    Belum ada media.
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="grid grid-cols-3 gap-2 px-2 pb-6">
+              {mediaImages.map((src, i) => (
+                <div
+                  key={`${src}-${i}`}
+                  className="overflow-hidden rounded-xl border border-zinc-800"
+                >
+                  <img src={src} alt={`media-${i}`} className="aspect-square w-full object-cover" />
+                </div>
+              ))}
+              {!loadingThreads && mediaImages.length === 0 && (
+                <div className="col-span-3 py-10 text-center text-sm text-zinc-400">
+                  Belum ada media.
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -369,7 +276,6 @@ export default function ProfilePage() {
         onOpenChange={setOpenEdit}
         coverStyle={coverStyle}
         onAvatarUpdated={(newAvatar) => {
-          // sync avatar ke thread list di page ini (biar UI langsung berubah)
           setThreads((prev) =>
             prev.map((t: any) => ({
               ...t,

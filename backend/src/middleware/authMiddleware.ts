@@ -2,8 +2,6 @@ import jwt from "jsonwebtoken"
 import { Request, Response, NextFunction } from "express"
 
 export function authMiddleware(req: Request & { user?: any }, res: Response, next: NextFunction) {
-  console.log("REST headers.cookie =", req.headers.cookie);
-  console.log("REST req.cookies =", req.cookies);
 
   const token = req.cookies?.token;
   if (!token) return res.status(401).json({ message: "Unauthorized (no cookie token)" });

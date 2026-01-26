@@ -9,11 +9,10 @@ import { setThreadLikeFromServer } from "@/store/likes";
 
 type LikePayload = {
   threadId?: number | string;
-  id?: number | string; // kadang pakai id
+  id?: number | string;
   likes?: number | string;
   likesCount?: number | string;
-  isLiked?: boolean;
-  userId?: number | string;
+  isLiked?: boolean; // private only
 };
 
 const toNumber = (v: any, fallback = 0) => {
@@ -21,7 +20,7 @@ const toNumber = (v: any, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-const PostItem = () => {
+export default function PostItem() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
   const dispatch = useDispatch<AppDispatch>();
@@ -32,6 +31,7 @@ const PostItem = () => {
       const list = (res.data?.data?.threads ?? res.data?.threads ?? []) as Thread[];
       setThreads(list);
 
+      // ✅ REST seed: isLiked + likesCount
       list.forEach((t: any) => {
         dispatch(
           setThreadLikeFromServer({
@@ -51,7 +51,7 @@ const PostItem = () => {
   useEffect(() => {
     fetchThreads();
 
-    const onCreated = (payload: any) => {
+    const onThreadCreated = (payload: any) => {
       const t: any = payload?.thread ?? payload;
       if (!t?.id) return;
 
@@ -61,31 +61,32 @@ const PostItem = () => {
         return [t as Thread, ...prev];
       });
 
+      // ✅ seed untuk thread baru
       dispatch(
         setThreadLikeFromServer({
           threadId: toNumber(t.id),
-          isLiked: Boolean(t?.isLiked),
-          likesCount: toNumber(t?.likes ?? 0),
+          isLiked: Boolean(t.isLiked),
+          likesCount: toNumber(t.likes ?? 0),
         })
       );
     };
 
     const onLikeUpdated = (payload: LikePayload) => {
-      const threadId = payload?.threadId ?? payload?.id;
-      const idNum = toNumber(threadId, 0);
-      if (!idNum) return;
+      const rawThreadId = payload.threadId ?? payload.id;
+      const threadId = toNumber(rawThreadId, 0);
+      if (!threadId) return;
 
       const likesCount =
-        payload?.likesCount !== undefined
+        payload.likesCount !== undefined
           ? toNumber(payload.likesCount)
-          : payload?.likes !== undefined
+          : payload.likes !== undefined
           ? toNumber(payload.likes)
           : undefined;
 
-      // update local list (optional tapi bikin UI post list ikut update)
+      // ✅ update list lokal: count always, isLiked only if exists
       setThreads((prev) =>
         prev.map((t: any) => {
-          if (Number(t.id) !== idNum) return t;
+          if (toNumber(t.id) !== threadId) return t;
           const next: any = { ...t };
           if (likesCount !== undefined) next.likes = likesCount;
           if (typeof payload.isLiked === "boolean") next.isLiked = payload.isLiked;
@@ -93,30 +94,20 @@ const PostItem = () => {
         })
       );
 
-      dispatch(
-        setThreadLikeFromServer({
-          threadId: idNum,
-          isLiked: typeof payload.isLiked === "boolean" ? payload.isLiked : false,
-          likesCount: likesCount ?? 0,
-        })
-      );
+      // ✅ socket patch: COUNT only / isLiked only if sent (private)
+      const patch: any = { threadId };
+      if (likesCount !== undefined) patch.likesCount = likesCount;
+      if (typeof payload.isLiked === "boolean") patch.isLiked = payload.isLiked;
+
+      dispatch(setThreadLikeFromServer(patch));
     };
 
-    socket.on("thread:created", onCreated);
-
-    // ✅ listen beberapa nama event biar aman
-    socket.on("thread:likeUpdated", onLikeUpdated);
+    socket.on("thread:created", onThreadCreated);
     socket.on("thread:like_updated", onLikeUpdated);
-    socket.on("thread:like", onLikeUpdated);
-    socket.on("like:updated", onLikeUpdated);
 
     return () => {
-      socket.off("thread:created", onCreated);
-
-      socket.off("thread:likeUpdated", onLikeUpdated);
+      socket.off("thread:created", onThreadCreated);
       socket.off("thread:like_updated", onLikeUpdated);
-      socket.off("thread:like", onLikeUpdated);
-      socket.off("like:updated", onLikeUpdated);
     };
   }, [dispatch]);
 
@@ -125,10 +116,8 @@ const PostItem = () => {
   return (
     <>
       {threads.map((t: any) => (
-        <PostRow key={Number(t.id)} thread={t} />
+        <PostRow key={toNumber(t.id)} thread={t} />
       ))}
     </>
   );
-};
-
-export default PostItem;
+}

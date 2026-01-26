@@ -29,8 +29,10 @@ export default function PostRow({ thread }: { thread: Thread }) {
   const dispatch = useDispatch<AppDispatch>();
   const v = useSelector(selectAvatarVersion);
 
-  const likeState = useSelector(selectThreadLike(thread.id));
-  const pending = useSelector(selectLikePending(`thread:${thread.id}`));
+  const tid = toNumber((thread as any).id, 0);
+
+  const likeState = useSelector(selectThreadLike(tid));
+  const pending = useSelector(selectLikePending(`thread:${tid}`));
 
   const like = likeState ?? {
     isLiked: Boolean((thread as any).isLiked),
@@ -38,15 +40,17 @@ export default function PostRow({ thread }: { thread: Thread }) {
   };
 
   useEffect(() => {
+    if (!tid) return;
     if (likeState) return;
+
     dispatch(
       setThreadLikeFromServer({
-        threadId: Number(thread.id),
+        threadId: tid,
         isLiked: Boolean((thread as any).isLiked),
         likesCount: toNumber((thread as any).likes),
       })
     );
-  }, [dispatch, likeState, thread.id]);
+  }, [dispatch, likeState, tid, thread]);
 
   const images =
     Array.isArray((thread as any).image) && (thread as any).image.length > 0
@@ -54,14 +58,15 @@ export default function PostRow({ thread }: { thread: Thread }) {
       : [];
 
   const onToggleLike = async () => {
+    if (!tid) return;
     const prev = like;
 
-    dispatch(optimisticToggleThread({ threadId: thread.id }));
+    dispatch(optimisticToggleThread({ threadId: tid }));
     try {
-      await dispatch(toggleThreadLike(thread.id)).unwrap();
+      await dispatch(toggleThreadLike(tid)).unwrap();
     } catch (e) {
       console.error("Toggle like failed", e);
-      dispatch(rollbackThread({ threadId: thread.id, prev }));
+      dispatch(rollbackThread({ threadId: tid, prev }));
     }
   };
 
@@ -73,12 +78,12 @@ export default function PostRow({ thread }: { thread: Thread }) {
 
   return (
     <div
-      key={thread.id}
+      key={tid || String((thread as any).id)}
       role="button"
       tabIndex={0}
-      onClick={() => navigate(`/thread/${thread.id}`)}
+      onClick={() => navigate(`/thread/${tid}`)}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") navigate(`/thread/${thread.id}`);
+        if (e.key === "Enter" || e.key === " ") navigate(`/thread/${tid}`);
       }}
       className="flex gap-4 border-b border-zinc-800 px-4 py-4 hover:bg-zinc-900/50"
     >
@@ -91,20 +96,14 @@ export default function PostRow({ thread }: { thread: Thread }) {
 
       <div className="flex-1">
         <div className="flex flex-wrap items-center gap-1 text-sm">
-          <span className="font-semibold text-zinc-100">
-            {author?.name ?? "Unknown"}
-          </span>
+          <span className="font-semibold text-zinc-100">{author?.name ?? "Unknown"}</span>
           <span className="text-zinc-400">
             @{author?.username ?? "unknown"} ·{" "}
-            {(thread as any).created_at
-              ? new Date((thread as any).created_at).toLocaleString()
-              : ""}
+            {(thread as any).created_at ? new Date((thread as any).created_at).toLocaleString() : ""}
           </span>
         </div>
 
-        <p className="mt-1 text-sm leading-relaxed text-zinc-200">
-          {(thread as any).content}
-        </p>
+        <p className="mt-1 text-sm leading-relaxed text-zinc-200">{(thread as any).content}</p>
 
         {images.length > 0 && <ThreadImages images={images} />}
 
@@ -126,7 +125,7 @@ export default function PostRow({ thread }: { thread: Thread }) {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/thread/${thread.id}`);
+              navigate(`/thread/${tid}`);
             }}
             className="flex items-center gap-1 hover:text-zinc-200"
           >

@@ -30,13 +30,11 @@ export default function SearchPage() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // debounce input
   useEffect(() => {
     const t = setTimeout(() => setDebounced(keyword.trim()), 300);
     return () => clearTimeout(t);
   }, [keyword]);
 
-  // fetch search
   useEffect(() => {
     const run = async () => {
       setError(null);
@@ -52,7 +50,6 @@ export default function SearchPage() {
 
       setLoading(true);
       try {
-        // ⚠️ Kalau backend kamu route-nya /users, ganti "/search" -> "/users"
         const res = await api.get("/search", {
           params: { keyword: debounced },
           withCredentials: true,
@@ -73,7 +70,6 @@ export default function SearchPage() {
     return () => abortRef.current?.abort();
   }, [debounced]);
 
-  // websocket sync follow state (NO connect/disconnect di page)
   useEffect(() => {
     const onFollowChanged = (p: {
       followerId: number | string;
@@ -107,7 +103,6 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* search bar */}
       <div className="sticky top-0 z-10 border-b border-zinc-800 bg-black/70 backdrop-blur">
         <div className="px-4 py-3">
           <div className="flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-950 px-4 py-2 focus-within:border-zinc-600">
@@ -121,11 +116,7 @@ export default function SearchPage() {
           </div>
 
           <div className="mt-2 text-xs text-zinc-500">
-            {loading
-              ? "Searching..."
-              : debounced
-              ? `Result: "${debounced}"`
-              : "Type to search"}
+            {loading ? "Searching..." : debounced ? `Result: "${debounced}"` : "Type to search"}
           </div>
         </div>
       </div>
@@ -158,6 +149,13 @@ export default function SearchPage() {
               <FollowButton
                 userId={u.id}
                 isFollowing={u.is_following ?? false}
+                user={{
+                  id: String(u.id),
+                  username: u.username,
+                  name: u.name,
+                  avatar: u.avatar ?? "",
+                  is_following: u.is_following ?? false,
+                }}
                 onToggle={(next) => {
                   setUsers((prev) =>
                     prev.map((x) => {
@@ -177,9 +175,7 @@ export default function SearchPage() {
         })}
 
         {!loading && debounced && users.length === 0 && (
-          <div className="px-4 py-10 text-center text-sm text-zinc-500">
-            No users found.
-          </div>
+          <div className="px-4 py-10 text-center text-sm text-zinc-500">No users found.</div>
         )}
       </div>
     </div>

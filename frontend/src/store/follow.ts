@@ -26,9 +26,16 @@ type State = {
 };
 
 export type SocketFollowChangedPayload = {
+  myId: number;
   followerId: number;
   targetUserId: number;
   isFollowing: boolean;
+  followerUser?: {
+    id: string;
+    username: string;
+    name: string;
+    avatar: string;
+  };
 };
 
 const initialState: State = {
@@ -47,6 +54,19 @@ const patchIsFollowing = (arr: FollowUserItem[], targetId: number, val: boolean)
   if (i !== -1) arr[i] = { ...arr[i], is_following: val };
 };
 
+const removeById = (arr: FollowUserItem[], id: string) => arr.filter((u) => u.id !== id);
+
+const upsertFront = (arr: FollowUserItem[], item: FollowUserItem) => {
+  const i = arr.findIndex((x) => x.id === item.id);
+  if (i === -1) return [item, ...arr];
+  const copy = [...arr];
+  copy[i] = { ...copy[i], ...item };
+  // move to front (optional)
+  copy.unshift(copy.splice(i, 1)[0]);
+  return copy;
+};
+
+// ===== THUNKS =====
 export const fetchFollowersThunk = createAsyncThunk<
   FollowUserItem[],
   void,
@@ -69,7 +89,8 @@ export const fetchFollowingThunk = createAsyncThunk<
   try {
     const res = await followsApi.following();
     if (res.status === "error") return rejectWithValue(res.message);
-    return res.data.followers; // backend kamu pakai key followers juga
+    // backend kamu pakai key followers juga
+    return res.data.followers;
   } catch (e: any) {
     return rejectWithValue(e?.response?.data?.message ?? "Failed to fetch following");
   }
@@ -89,25 +110,24 @@ export const fetchSuggestedThunk = createAsyncThunk<
   }
 });
 
-export const followThunk = createAsyncThunk<
-  boolean,
-  number,
-  { rejectValue: string }
->("follow/follow", async (id, { rejectWithValue }) => {
-  try {
-    const res = await followsApi.follow(id);
-    if (res.status === "error") return rejectWithValue(res.message);
-    return true;
-  } catch (e: any) {
-    return rejectWithValue(e?.response?.data?.message ?? "Failed to follow");
+export const followThunk = createAsyncThunk<boolean, number, { rejectValue: string }>(
+  "follow/follow",
+  async (id, { rejectWithValue }) => {
+    try {
+      const res = await followsApi.follow(id);
+      if (res.status === "error") return rejectWithValue(res.message);
+      return true;
+    } catch (e: any) {
+      return rejectWithValue(e?.response?.data?.message ?? "Failed to follow");
+    }
   }
-});
+);
 
 export const unfollowThunk = createAsyncThunk<
   boolean,
-  number,
+  { id: number; user?: FollowUserItem },
   { rejectValue: string }
->("follow/unfollow", async (id, { rejectWithValue }) => {
+>("follow/unfollow", async ({ id }, { rejectWithValue }) => {
   try {
     const res = await followsApi.unfollow(id);
     if (res.status === "error") return rejectWithValue(res.message);
@@ -117,41 +137,74 @@ export const unfollowThunk = createAsyncThunk<
   }
 });
 
+
+// ===== SLICE =====
 const slice = createSlice({
   name: "follow",
   initialState,
-
   reducers: {
-  followChanged: (s, a) => {
-    const { followerId, targetUserId, isFollowing, followerUser } = a.payload;
+    followChanged: (s, a: PayloadAction<SocketFollowChangedPayload>) => {
+      const { myId, followerId, targetUserId, isFollowing, followerUser } = a.payload;
 
-    const fid = String(followerId);
-    const tid = String(targetUserId);
+      const mid = String(myId);
+      const fid = String(followerId);
+      const tid = String(targetUserId);
 
-  // ===== CASE 1: AKU ADALAH TARGET (followers-ku berubah)
-    if (String(s.meId) === tid) {
-      if (isFollowing) {
-        // ✅ orang baru follow aku → add ke followers
-        const exists = s.followers.some((u) => u.id === fid);
-        if (!exists && followerUser) {
-          s.followers = [
-            { ...followerUser, is_following: false },
-            ...s.followers,
-          ];
+      // selalu toggle status di suggested (kalau ada)
+      patchIsFollowing(s.suggested, targetUserId, isFollowing);
+
+      // ===== CASE A: AKU ADALAH FOLLOWER (aku follow/unfollow orang)
+      if (mid === fid) {
+        // following + suggested must toggle
+        patchIsFollowing(s.following, targetUserId, isFollowing);
+        patchIsFollowing(s.suggested, targetUserId, isFollowing);
+
+        if (isFollowing) {
+          // pindahin dari suggested -> following (jika ada)
+          const picked = s.suggested.find((x) => x.id === tid);
+          if (picked) {
+            const exists = s.following.some((x) => x.id === tid);
+            if (!exists) s.following.unshift({ ...picked, is_following: true });
+            s.suggested = removeById(s.suggested, tid);
+          } else {
+            // kalau tidak ada di suggested, minimal pastikan dia marked true kalau ada
+            patchIsFollowing(s.following, targetUserId, true);
+          }
+        } else {
+          // remove dari following
+          const removed = s.following.find((x) => x.id === tid);
+          s.following = removeById(s.following, tid);
+
+          // optional: masukin ke suggested lagi
+          if (removed) {
+            const exists = s.suggested.some((x) => x.id === tid);
+            if (!exists) {
+              s.suggested = [{ ...removed, is_following: false }, ...s.suggested].slice(0, 5);
+            }
+          }
         }
-      } else {
-        // ✅ orang unfollow aku → remove dari followers
-        s.followers = s.followers.filter((u) => u.id !== fid);
       }
-    }
 
-  // ===== CASE 2: AKU ADALAH FOLLOWER (status following-ku berubah)
-    if (String(s.meId) === fid) {
-      patchIsFollowing(s.following, Number(tid), isFollowing);
-      patchIsFollowing(s.suggested, Number(tid), isFollowing);
+      // ===== CASE B: AKU ADALAH TARGET (followers-ku berubah)
+      if (mid === tid) {
+        if (isFollowing) {
+          // orang follow aku → add follower user (kalau ada)
+          if (followerUser) {
+            const exists = s.followers.some((u) => u.id === fid);
+            if (!exists) {
+              s.followers.unshift({ ...followerUser, is_following: false });
+            } else {
+              // update info follower jika berubah
+              s.followers = upsertFront(s.followers, { ...followerUser, is_following: false });
+            }
+          }
+        } else {
+          // orang unfollow aku → remove
+          s.followers = removeById(s.followers, fid);
+        }
       }
     },
-},
+  },
 
   extraReducers: (b) => {
     b
@@ -174,8 +227,7 @@ const slice = createSlice({
       })
       .addCase(fetchFollowingThunk.fulfilled, (s, a) => {
         s.statusFollowing = "succeeded";
-
-        // penting: following list harus true
+        // following list harus true
         s.following = a.payload.map((u) => ({ ...u, is_following: true }));
       })
       .addCase(fetchFollowingThunk.rejected, (s, a) => {
@@ -189,18 +241,26 @@ const slice = createSlice({
       })
       .addCase(fetchSuggestedThunk.fulfilled, (s, a) => {
         s.statusSuggested = "succeeded";
-        s.suggested = a.payload;
+        const map = new Map<string, FollowUserItem>();
+        for (const u of s.suggested) map.set(u.id, u);
+          for (const u of a.payload) {
+            const prev = map.get(u.id);
+            map.set(u.id, { ...u, ...(prev ?? {}) });
+          }
+
+        s.suggested = Array.from(map.values()).slice(0, 5);
       })
+
       .addCase(fetchSuggestedThunk.rejected, (s, a) => {
         s.statusSuggested = "failed";
         s.error = (a.payload as string) ?? "Failed";
       })
 
+      // ===== optimistic follow =====
       .addCase(followThunk.pending, (s, a) => {
         const targetIdNum = a.meta.arg;
         const targetId = String(targetIdNum);
 
-        // ambil user dari suggested
         const picked = s.suggested.find((x) => x.id === targetId);
 
         patchIsFollowing(s.followers, targetIdNum, true);
@@ -208,60 +268,51 @@ const slice = createSlice({
         patchIsFollowing(s.suggested, targetIdNum, true);
 
         // remove dari suggested
-        s.suggested = s.suggested.filter((x) => x.id !== targetId);
+        s.suggested = removeById(s.suggested, targetId);
 
-        // ✅ masukin ke following (REALTIME)
+        // masukin ke following
         if (picked) {
           const exists = s.following.some((x) => x.id === targetId);
-          if (!exists) {
-            s.following = [
-              { ...picked, is_following: true },
-              ...s.following,
-            ];
-          }
+          if (!exists) s.following.unshift({ ...picked, is_following: true });
         }
       })
-
-
       .addCase(followThunk.rejected, (s, a) => {
         const targetId = a.meta.arg;
-
         patchIsFollowing(s.followers, targetId, false);
         patchIsFollowing(s.following, targetId, false);
         patchIsFollowing(s.suggested, targetId, false);
-
         s.error = (a.payload as string) ?? "Failed to follow";
       })
 
+      // ===== optimistic unfollow =====
       .addCase(unfollowThunk.pending, (s, a) => {
-        const targetIdNum = a.meta.arg;
+        const targetIdNum = a.meta.arg.id;
         const targetId = String(targetIdNum);
-        const removed = s.following.find((x) => x.id === targetId);
+
+        // ✅ ambil dari following kalau ada, kalau tidak ada pakai user dari arg (SearchPage)
+        const removed =
+          s.following.find((x) => x.id === targetId) ??
+          a.meta.arg.user;
 
         patchIsFollowing(s.followers, targetIdNum, false);
         patchIsFollowing(s.following, targetIdNum, false);
         patchIsFollowing(s.suggested, targetIdNum, false);
 
+        // remove dari following
         s.following = s.following.filter((x) => x.id !== targetId);
 
+        // ✅ masukin balik ke suggested walau unfollow dari SearchPage
         if (removed) {
           const exists = s.suggested.some((x) => x.id === targetId);
           if (!exists) {
-            s.suggested = [
-              { ...removed, is_following: false },
-              ...s.suggested,
-            ].slice(0, 5); // optional: cap limit suggested
+            s.suggested = [{ ...removed, is_following: false }, ...s.suggested].slice(0, 5);
           }
         }
       })
 
-
-
-
       .addCase(unfollowThunk.rejected, (s, a) => {
-        const targetId = a.meta.arg;
+        const targetId = a.meta.arg.id;
 
-        // rollback
         patchIsFollowing(s.followers, targetId, true);
         patchIsFollowing(s.following, targetId, true);
         patchIsFollowing(s.suggested, targetId, true);
@@ -269,7 +320,7 @@ const slice = createSlice({
         s.error = (a.payload as string) ?? "Failed to unfollow";
       })
 
-      // reset saat logout
+
       .addCase(resetAll, () => initialState);
   },
 });

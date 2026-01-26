@@ -1,15 +1,18 @@
 import { Button } from "@/components/ui/button";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "@/store/types";
-import { followThunk, unfollowThunk } from "@/store/follow";
+import { followThunk, unfollowThunk, type FollowUserItem } from "@/store/follow";
 
 type Props = {
   userId: string | number;
   isFollowing: boolean;
   onToggle?: (next: boolean) => void;
+
+  // ✅ tambahan: untuk unfollow dari SearchPage supaya bisa masuk suggested
+  user?: FollowUserItem;
 };
 
-export default function FollowButton({ userId, isFollowing, onToggle }: Props) {
+export default function FollowButton({ userId, isFollowing, onToggle, user }: Props) {
   const dispatch = useDispatch<AppDispatch>();
   const idNum = Number(userId);
 
@@ -18,17 +21,18 @@ export default function FollowButton({ userId, isFollowing, onToggle }: Props) {
 
     const next = !isFollowing;
 
-    // ✅ optimistic update
+    // ✅ optimistic update UI lokal (SearchPage)
     onToggle?.(next);
 
     try {
       if (isFollowing) {
-        await dispatch(unfollowThunk(idNum)).unwrap();
+        // ✅ pass user data supaya reducer bisa masukin balik ke suggested
+        await dispatch(unfollowThunk({ id: idNum, user })).unwrap();
       } else {
         await dispatch(followThunk(idNum)).unwrap();
       }
-    } catch (e) {
-      // rollback
+    } catch {
+      // rollback UI lokal
       onToggle?.(isFollowing);
     }
   }
