@@ -5,10 +5,10 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import http from "http";
 import { Server } from "socket.io";
-import cookie from "cookie";
+import * as cookie from "cookie";
 import jwt from "jsonwebtoken";
+
 import router from "./routes/index";
-import { verifyToken } from "./utils/jwt";
 
 const app = express();
 
@@ -27,7 +27,6 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use("/api/v1", router);
 
 const server = http.createServer(app);
-
 export const io = new Server(server, {
   cors: {
     origin: "http://localhost:5173",
@@ -38,45 +37,58 @@ export const io = new Server(server, {
 
 io.use((socket, next) => {
   try {
-    const rawCookie = socket.request.headers.cookie;
-    console.log("🍪 rawCookie =", rawCookie);
 
+    const rawCookie = socket.request.headers.cookie;
     if (!rawCookie) {
-      return next(new Error("unauthorized: no cookie"));
+      return next(new Error("No cookie"));
     }
 
     const parsed = cookie.parse(rawCookie);
-    const rawToken = parsed.token;
+    const token = parsed.token;
 
-    if (!rawToken) {
-      return next(new Error("unauthorized: no token"));
+    if (!token) {
+      return next(new Error("Unauthorized"));
     }
 
-    const token = rawToken.startsWith("Bearer ")
-      ? rawToken.slice(7)
-      : rawToken;
+    const payload = jwt.verify(
+      token,
+      process.env.JWT_SECRET!
+    ) as { id: number };
 
-    const payload = verifyToken(token);
-    (socket as any).user = payload;
+    (socket as any).userId = payload.id;
+
+    console.log("✅ Socket authenticated as user:", payload.id);
 
     next();
   } catch (e: any) {
-    console.log("❌ VERIFY ERROR =", e.name, e.message);
-    next(new Error("unauthorized: invalid token"));
+    console.log("❌ Socket auth error:", e.message);
+    next(new Error("Unauthorized"));
   }
 });
 
 
 io.on("connection", (socket) => {
-  const userId = (socket as any).userId as number;
+
+  const userId = (socket as any).userId;
+
+  console.log("🔌 new connection:", {
+    socketId: socket.id,
+    userId,
+  });
+
+  if (!userId) {
+    console.log("🟡 connected WITHOUT userId");
+    return;
+  }
 
   socket.join(`user:${userId}`);
+  console.log(`🟢 joined room user:${userId}`);
 
-  console.log(`🟢 socket ${socket.id} connected userId=${userId} (joined user:${userId})`);
-
-  socket.on("disconnect", (reason) => {
-    console.log(`🔴 socket disconnected: ${socket.id} reason=${reason}`);
+    socket.on("disconnect", () => {
+    console.log("🔴 socket disconnected:", socket.id);
   });
+
+  socket.on("connect_error", (e) => console.log("[client] socket connect_error:", e.message));
 });
 
 server.listen(process.env.PORT, () => {

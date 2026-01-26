@@ -27,10 +27,11 @@ export async function handleLogin(req: Request, res: Response) {
 
     const { token } = await loginService(identifier, password);
 
-   res.cookie("token", token, {
+      res.cookie("token", token, {
       httpOnly: true,
-      sameSite: "none",
-      secure: false, // true kalau https
+      sameSite: "lax",   
+      secure: false, 
+      path: "/",
     });
 
     return res.status(200).json({

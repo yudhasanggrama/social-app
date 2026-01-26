@@ -40,7 +40,7 @@ export function Login() {
             dispatch(
             login({
                 id: meRes.data.id,
-                name: meRes.data.username, // atau meRes.data.name
+                name: meRes.data.username,
             })
             );
 
