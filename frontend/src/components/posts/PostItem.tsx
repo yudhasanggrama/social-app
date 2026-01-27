@@ -1,19 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { Thread } from "@/Types/thread";
 import api from "@/lib/api";
 import { socket } from "@/lib/socket";
 import PostRow from "./PostRow";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch } from "@/store/types";
 import { setThreadLikeFromServer } from "@/store/likes";
-
-type LikePayload = {
-  threadId?: number | string;
-  id?: number | string;
-  likes?: number | string;
-  likesCount?: number | string;
-  isLiked?: boolean; // private only
-};
+import { selectMe, selectAvatarVersion } from "@/store/profile";
 
 const toNumber = (v: any, fallback = 0) => {
   const n = Number(v);
@@ -25,13 +18,32 @@ export default function PostItem() {
   const [loading, setLoading] = useState(true);
   const dispatch = useDispatch<AppDispatch>();
 
+  const me = useSelector(selectMe);
+  const v = useSelector(selectAvatarVersion);
+  
+  const patchMyAvatar = useCallback(
+    (newAvatar: string) => {
+      setThreads((prev) =>
+        prev.map((t: any) => {
+          const authorId = Number(t?.user?.id ?? t?.User?.id ?? t?.user_id ?? 0);
+          if (authorId !== Number(me?.id)) return t;
+          return {
+            ...t,
+            user: t.user ? { ...t.user, avatar: newAvatar } : t.user,
+            User: t.User ? { ...t.User, avatar: newAvatar } : t.User,
+          };
+        })
+      );
+    },
+    [me?.id]
+  );
+
   const fetchThreads = async () => {
     try {
       const res = await api.get("/threads", { withCredentials: true });
       const list = (res.data?.data?.threads ?? res.data?.threads ?? []) as Thread[];
       setThreads(list);
 
-      // ✅ REST seed: isLiked + likesCount
       list.forEach((t: any) => {
         dispatch(
           setThreadLikeFromServer({
@@ -48,6 +60,21 @@ export default function PostItem() {
     }
   };
 
+  // patch avatar tiap avatarVersion berubah (setelah kamu update avatar)
+  useEffect(() => {
+    if (!me?.id) return;
+
+    const newAvatar =
+      (me as any)?.avatar ??
+      (me as any)?.profile_picture ??
+      (me as any)?.photo_profile ??
+      "";
+
+    if (!newAvatar) return;
+
+    patchMyAvatar(newAvatar);
+  }, [v, me?.id, patchMyAvatar, me]);
+
   useEffect(() => {
     fetchThreads();
 
@@ -61,7 +88,6 @@ export default function PostItem() {
         return [t as Thread, ...prev];
       });
 
-      // ✅ seed untuk thread baru
       dispatch(
         setThreadLikeFromServer({
           threadId: toNumber(t.id),
@@ -71,7 +97,7 @@ export default function PostItem() {
       );
     };
 
-    const onLikeUpdated = (payload: LikePayload) => {
+    const onLikeUpdated = (payload: any) => {
       const rawThreadId = payload.threadId ?? payload.id;
       const threadId = toNumber(rawThreadId, 0);
       if (!threadId) return;
@@ -83,7 +109,6 @@ export default function PostItem() {
           ? toNumber(payload.likes)
           : undefined;
 
-      // ✅ update list lokal: count always, isLiked only if exists
       setThreads((prev) =>
         prev.map((t: any) => {
           if (toNumber(t.id) !== threadId) return t;
@@ -94,7 +119,6 @@ export default function PostItem() {
         })
       );
 
-      // ✅ socket patch: COUNT only / isLiked only if sent (private)
       const patch: any = { threadId };
       if (likesCount !== undefined) patch.likesCount = likesCount;
       if (typeof payload.isLiked === "boolean") patch.isLiked = payload.isLiked;
@@ -102,14 +126,25 @@ export default function PostItem() {
       dispatch(setThreadLikeFromServer(patch));
     };
 
+    // (opsional) realtime avatar lewat socket
+    const onAvatarUpdated = (payload: any) => {
+      const userId = toNumber(payload?.userId ?? payload?.id, 0);
+      const avatar = String(payload?.avatar ?? payload?.photo_profile ?? "");
+      if (!userId || !avatar) return;
+      if (userId !== toNumber(me?.id, 0)) return;
+      patchMyAvatar(avatar);
+    };
+
     socket.on("thread:created", onThreadCreated);
     socket.on("thread:like_updated", onLikeUpdated);
+    socket.on("profile:avatar_updated", onAvatarUpdated); // kalau event ini ada
 
     return () => {
       socket.off("thread:created", onThreadCreated);
       socket.off("thread:like_updated", onLikeUpdated);
+      socket.off("profile:avatar_updated", onAvatarUpdated);
     };
-  }, [dispatch]);
+  }, [dispatch, me?.id, patchMyAvatar]);
 
   if (loading) return <div>Loading...</div>;
 

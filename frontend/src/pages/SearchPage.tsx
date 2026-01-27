@@ -7,6 +7,7 @@ import { useSelector } from "react-redux";
 import { selectAvatarVersion } from "@/store/profile";
 import { UserPlus } from "lucide-react";
 import { socket } from "@/lib/socket";
+import { useNavigate } from "react-router-dom";
 
 type UserItem = {
   id: string;
@@ -21,6 +22,7 @@ const clampFollowers = (n: number) => (n < 0 ? 0 : n);
 
 export default function SearchPage() {
   const v = useSelector(selectAvatarVersion);
+  const nav = useNavigate(); // ✅ TAMBAHKAN
 
   const [keyword, setKeyword] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -133,14 +135,18 @@ export default function SearchPage() {
               key={u.id}
               className="flex items-center justify-between px-4 py-3 hover:bg-zinc-900/40"
             >
-              <div className="flex items-center gap-3 min-w-0">
+              {/* ✅ TAMBAHKAN clickable user area */}
+              <div
+                className="flex items-center gap-3 min-w-0 cursor-pointer"
+                onClick={() => nav(`/u/${u.username}`)}
+              >
                 <Avatar>
                   <AvatarImage src={src} />
                   <AvatarFallback>{fallback}</AvatarFallback>
                 </Avatar>
 
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{u.name}</div>
+                  <div className="truncate text-sm font-semibold hover:underline">{u.name}</div>
                   <div className="truncate text-xs text-zinc-400">@{u.username}</div>
                   <div className="text-xs text-zinc-500">{u.followers} followers</div>
                 </div>

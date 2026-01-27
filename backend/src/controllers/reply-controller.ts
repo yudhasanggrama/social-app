@@ -60,23 +60,27 @@ export const findByThreadId = async (req: AuthRequest, res: Response) => {
 
 export const toggleLike = async (req: AuthRequest, res: Response) => {
   try {
-    const replyId = Number(req.body.reply_id);
+    const raw = req.body.reply_id ?? req.body.replyId ?? req.body.id;
+    const replyId = Number(raw);
     const userId = req.user?.id;
 
-    if (!userId || Number.isNaN(replyId)) {
-      return res.status(400).json({ code: 400, status: "error", message: "Invalid request" });
+    if (!userId || !Number.isInteger(replyId) || replyId <= 0) {
+      return res.status(400).json({
+        code: 400,
+        status: "error",
+        message: "Invalid request",
+        debug: { rawReplyId: raw },
+      });
     }
 
     const result = await toggleReplyLike(replyId, userId);
 
-    // 1) broadcast count ke semua
     io.emit("reply:like_updated", {
       replyId: result.replyId,
       threadId: result.threadId,
       likesCount: result.likesCount,
     });
 
-    // 2) private: status liked untuk actor
     io.to(`user:${userId}`).emit("reply:like_updated", {
       replyId: result.replyId,
       threadId: result.threadId,
@@ -95,6 +99,7 @@ export const toggleLike = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ code: 500, status: "error", message: "Internal server error" });
   }
 };
+
 
 
 

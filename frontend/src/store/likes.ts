@@ -172,3 +172,10 @@ export const selectReplyLike = (replyId: number) => (s: RootState) =>
 
 export const selectLikePending = (key: string) => (s: RootState) =>
   Boolean(s.likes.pending[key]);
+
+export const selectThreadLikeMaybe = (threadId: number) => (s: RootState) =>
+  s.likes.thread[Number(threadId)];
+
+export const selectReplyLikeMaybe = (replyId: number) => (s: RootState) =>
+  s.likes.reply[Number(replyId)];
+

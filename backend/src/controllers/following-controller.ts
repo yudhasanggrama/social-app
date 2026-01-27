@@ -5,57 +5,6 @@ import { getFollowListService, followUserService, unfollowUserService, isFollowi
 import { io } from "../app";
 import { prisma } from "../prisma/client";
 
-// export async function toggle(req: AuthRequest, res: Response) {
-//   try {
-//     const userId = req.user!.id;
-
-//     // fleksibel: kalau FE kamu kirim target_user_id atau followed_user_id
-//     const targetUserId = Number(req.body?.target_user_id ?? req.body?.followed_user_id);
-
-//     if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "target_user_id (atau followed_user_id) must be a positive integer.",
-//       });
-//     }
-
-//     if (targetUserId === userId) {
-//       return res.status(400).json({ status: "error", message: "You cannot follow yourself." });
-//     }
-
-//     // cek status follow sekarang
-//     const { isFollowing } = await isFollowingService({ userId, targetUserId });
-
-//     if (isFollowing) {
-//       await unfollowUserService({ userId, targetUserId });
-
-//       return res.json({
-//         status: "success",
-//         message: "You have successfully unfollowed the user.",
-//         data: { user_id: String(targetUserId), is_following: false },
-//       });
-//     }
-
-//     const result = await followUserService({ userId, targetUserId });
-
-//     if (!result.success && result.reason === "USER_NOT_FOUND") {
-//       return res.status(404).json({ status: "error", message: "User not found." });
-//     }
-
-//     return res.json({
-//       status: "success",
-//       message: "You have successfully followed the user.",
-//       data: { user_id: String(targetUserId), is_following: true },
-//     });
-//   } catch {
-//     return res.status(500).json({
-//       status: "error",
-//       message: "Failed to toggle follow status. Please try again later.",
-//     });
-//   }
-// }
-
-
 export async function getFollows(req: AuthRequest, res: Response) {
   try {
     const userId = req.user!.id;

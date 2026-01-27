@@ -1,4 +1,4 @@
-import { createAction, createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import { createAction, createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "@/store/index";
 import api from "@/lib/api";
 import { resetAll } from "@/store/index";
@@ -71,7 +71,17 @@ const inc = (n: number | undefined, d: number) => Math.max(0, (n ?? 0) + d);
 const slice = createSlice({
   name: "profile",
   initialState,
-  reducers: {},
+  reducers: {
+    // ✅ dipanggil setelah upload avatar sukses (tanpa perlu fetchProfile)
+    setMyAvatar: (s, a: PayloadAction<string>) => {
+      if (!s.me) return;
+      s.me.avatar = a.payload;
+    },
+    // ✅ cache-buster: bikin avatarImgSrc(..., v) berubah
+    bumpAvatarVersion: (s) => {
+      s.avatarVersion += 1;
+    },
+  },
   extraReducers: (b) => {
     b
       .addCase(fetchProfile.pending, (s) => {
@@ -81,7 +91,7 @@ const slice = createSlice({
       .addCase(fetchProfile.fulfilled, (s, a) => {
         s.fetchStatus = "succeeded";
         s.me = a.payload;
-        s.avatarVersion += 1;
+        s.avatarVersion += 1; // ✅ sudah benar: setiap fetch profile, bump version
       })
       .addCase(fetchProfile.rejected, (s, a) => {
         s.fetchStatus = "failed";
@@ -89,7 +99,7 @@ const slice = createSlice({
         s.me = null;
       })
 
-      // ✅ realtime update follower_count/following_count (MyProfile & SidebarRight)
+      // ✅ realtime update follower_count/following_count
       .addCase(profileFollowCountChanged, (s, a) => {
         if (!s.me) return;
 
@@ -98,12 +108,10 @@ const slice = createSlice({
 
         const delta = isFollowing ? 1 : -1;
 
-        // aku follow/unfollow orang -> following_count berubah
         if (myId === followerId) {
           s.me.following_count = inc(s.me.following_count, delta);
         }
 
-        // orang follow/unfollow aku -> follower_count berubah
         if (myId === targetUserId) {
           s.me.follower_count = inc(s.me.follower_count, delta);
         }
@@ -114,6 +122,9 @@ const slice = createSlice({
 });
 
 export default slice.reducer;
+
+// ✅ export actions
+export const { setMyAvatar, bumpAvatarVersion } = slice.actions;
 
 // selectors
 export const selectMe = (s: RootState) => s.profile.me;

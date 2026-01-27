@@ -12,19 +12,15 @@ export const toggle = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "Invalid request" });
     }
 
-    // result contoh: { threadId, likesCount, liked }
     const result = await toggleLike(userId, threadId);
 
-    // response REST (optional)
-    res.status(200).json({ result });
+    res.status(200).json({message:"Success to toogle like" ,result });
 
-    // ✅ 1) Broadcast ke semua: COUNT SAJA (tanpa userId, tanpa isLiked)
     io.emit("thread:like_updated", {
       threadId: result.threadId,
       likesCount: result.likesCount,
     });
 
-    // ✅ 2) Private ke user pelaku: isLiked (+count biar konsisten)
     io.to(`user:${userId}`).emit("thread:like_updated", {
       threadId: result.threadId,
       likesCount: result.likesCount,

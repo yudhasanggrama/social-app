@@ -1,4 +1,3 @@
-// src/lib/image.ts
 
 const ORIGIN = "http://localhost:9000";
 export const DEFAULT_AVATAR = `${ORIGIN}/uploads/default-avatar.png`;

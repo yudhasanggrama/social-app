@@ -18,6 +18,7 @@ import { socket } from "@/lib/socket";
 import { avatarImgSrc, publicUrl } from "@/lib/image";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import EditProfileDialog from "@/components/profile/EditProfileDialog";
+import { useNavigate } from "react-router-dom";
 
 type LikeUpdatedPayload = {
   threadId?: number | string;
@@ -51,6 +52,8 @@ export default function MyProfilePage() {
 
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
+
+  const nav = useNavigate()
 
   const displayName = me?.name ?? "Guest";
   const fallback = (displayName?.[0] ?? "U").toUpperCase();
@@ -95,45 +98,72 @@ export default function MyProfilePage() {
 
   // socket sync
   useEffect(() => {
-    if (!me?.id) return;
+  if (!me?.id) return;
 
-    const onLikeUpdated = (payload: LikeUpdatedPayload) => {
-      const rawThreadId = payload.threadId ?? payload.id;
-      const threadId = toNumber(rawThreadId, 0);
-      if (!threadId) return;
+  const onThreadCreated = (payload: any) => {
+    const t: any = payload?.thread ?? payload;
+    if (!t?.id) return;
 
-      const likesCount =
-        payload.likesCount !== undefined
-          ? toNumber(payload.likesCount)
-          : payload.likes !== undefined
-          ? toNumber(payload.likes)
-          : undefined;
+    // thread bisa punya author di `user` atau `User` tergantung format backend
+    const authorId =
+      toNumber(t?.user?.id ?? t?.User?.id ?? t?.user_id ?? t?.userId, 0);
 
-      // update list lokal
-      setThreads((prev) =>
-        prev.map((t: any) => {
-          if (toNumber(t.id) !== threadId) return t;
-          const next: any = { ...t };
-          if (likesCount !== undefined) next.likes = likesCount;
-          if (typeof payload.isLiked === "boolean") next.isLiked = payload.isLiked; // private only
-          return next;
-        })
-      );
+    // ✅ ini halaman "My Profile" => hanya tambah kalau thread milik saya
+    if (authorId !== toNumber(me.id)) return;
 
-      // ✅ socket patch: count only / isLiked only if sent
-      const patch: any = { threadId };
-      if (likesCount !== undefined) patch.likesCount = likesCount;
-      if (typeof payload.isLiked === "boolean") patch.isLiked = payload.isLiked;
+    setThreads((prev) => {
+      const exists = prev.some((x: any) => toNumber(x.id) === toNumber(t.id));
+      if (exists) return prev;
+      return [t as Thread, ...prev];
+    });
 
-      dispatch(setThreadLikeFromServer(patch));
-    };
+    // seed likes store biar UI like konsisten
+    dispatch(
+      setThreadLikeFromServer({
+        threadId: toNumber(t.id),
+        isLiked: Boolean(t.isLiked),
+        likesCount: toNumber(t.likes ?? 0),
+      })
+    );
+  };
 
-    socket.on("thread:like_updated", onLikeUpdated);
+  const onLikeUpdated = (payload: LikeUpdatedPayload) => {
+    const rawThreadId = payload.threadId ?? payload.id;
+    const threadId = toNumber(rawThreadId, 0);
+    if (!threadId) return;
 
-    return () => {
-      socket.off("thread:like_updated", onLikeUpdated);
-    };
-  }, [dispatch, me?.id]);
+    const likesCount =
+      payload.likesCount !== undefined
+        ? toNumber(payload.likesCount)
+        : payload.likes !== undefined
+        ? toNumber(payload.likes)
+        : undefined;
+
+    setThreads((prev) =>
+      prev.map((t: any) => {
+        if (toNumber(t.id) !== threadId) return t;
+        const next: any = { ...t };
+        if (likesCount !== undefined) next.likes = likesCount;
+        if (typeof payload.isLiked === "boolean") next.isLiked = payload.isLiked;
+        return next;
+      })
+    );
+
+    const patch: any = { threadId };
+    if (likesCount !== undefined) patch.likesCount = likesCount;
+    if (typeof payload.isLiked === "boolean") patch.isLiked = payload.isLiked;
+
+    dispatch(setThreadLikeFromServer(patch));
+  };
+
+  socket.on("thread:created", onThreadCreated);
+  socket.on("thread:like_updated", onLikeUpdated);
+
+  return () => {
+    socket.off("thread:created", onThreadCreated);
+    socket.off("thread:like_updated", onLikeUpdated);
+  };
+}, [dispatch, me?.id]);
 
   const mediaImages = useMemo(() => {
     const all: string[] = [];
@@ -156,7 +186,7 @@ export default function MyProfilePage() {
       {/* HEADER */}
       <div className="sticky top-0 z-10 border-b border-zinc-800 bg-black/70 backdrop-blur">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button className="rounded-full p-2 hover:bg-zinc-900">
+          <button onClick={() => nav(-1)} className="rounded-full p-2 hover:bg-zinc-900">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="text-sm font-semibold">{me?.name ?? "My Profile"}</div>

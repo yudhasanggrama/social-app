@@ -1,18 +1,42 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Outlet } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import type { AppDispatch } from "@/store/types";
+
 import SidebarLeft from "@/components/sidebars/SidebarLeft";
 import SidebarRight from "@/components/sidebars/SidebarRight";
-
 import CreatePostDialog from "@/components/threads/CreatePostDialog";
 import EditProfileDialog from "@/components/profile/EditProfileDialog";
 
-import { useFollowSocket } from "@/hooks/useFollowSocket"; // ✅ pakai hook
+import { useFollowSocket } from "@/hooks/useFollowSocket";
+import { useLikeSocket } from "@/hooks/useLikeSocket";
+
+import {
+  fetchProfile,
+  selectMe,
+  selectIsProfileLoading,
+  selectProfileFetchStatus,
+} from "@/store/profile";
 
 export default function AppLayout() {
-  useFollowSocket(); // ✅ socket follow realtime di sini
+  useFollowSocket();
+  useLikeSocket();
+
+  const dispatch = useDispatch<AppDispatch>();
+
+  const me = useSelector(selectMe);
+  const loading = useSelector(selectIsProfileLoading);
+  const fetchStatus = useSelector(selectProfileFetchStatus);
 
   const [openCreatePost, setOpenCreatePost] = useState(false);
   const [openEditProfile, setOpenEditProfile] = useState(false);
+
+  // ✅ bootstrap profile 1x di layout
+  useEffect(() => {
+    if (fetchStatus === "idle") {
+      dispatch(fetchProfile());
+    }
+  }, [dispatch, fetchStatus]);
 
   const coverStyle = useMemo(
     () => ({
@@ -22,6 +46,21 @@ export default function AppLayout() {
     []
   );
 
+  // - ketika app baru start → fetchStatus "idle" lalu jadi "loading"
+  // - selama idle/loading → tampilkan loading screen
+  const bootstrapping = fetchStatus === "idle" || fetchStatus === "loading" || loading;
+
+  if (bootstrapping) {
+    return (
+      <div className="min-h-screen bg-black text-zinc-400 flex items-center justify-center">
+        Loading...
+      </div>
+    );
+  }
+
+  // setelah bootstrapping selesai:
+  // - kalau me ada → tampil user
+  // - kalau me null → tampil guest (final, tanpa flicker)
   return (
     <div className="min-h-screen bg-black text-white">
       <CreatePostDialog open={openCreatePost} onOpenChange={setOpenCreatePost} />
@@ -41,6 +80,7 @@ export default function AppLayout() {
               context={{
                 openCreatePost: () => setOpenCreatePost(true),
                 openEditProfile: () => setOpenEditProfile(true),
+                me, // optional: kalau page butuh cepat akses user dari outlet context
               }}
             />
           </main>

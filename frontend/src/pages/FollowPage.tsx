@@ -12,12 +12,16 @@ import { selectAvatarVersion, selectMe } from "@/store/profile";
 import { avatarImgSrc } from "@/lib/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+// ✅ TAMBAHKAN
+import { useNavigate } from "react-router-dom";
+
 type Tab = "followers" | "following";
 
 export default function FollowPage() {
   const dispatch = useDispatch<AppDispatch>();
   const me = useSelector(selectMe);
   const avatarVersion = useSelector(selectAvatarVersion);
+  const nav = useNavigate(); // ✅ TAMBAHKAN
 
   const [tab, setTab] = useState<Tab>("followers");
 
@@ -36,7 +40,6 @@ export default function FollowPage() {
     [tab, followers, following]
   );
 
-  // ✅ local list supaya unfollow langsung hilang dari UI tanpa nunggu fetch
   const [localList, setLocalList] = useState<any[]>([]);
   useEffect(() => setLocalList(list as any[]), [list]);
 
@@ -81,7 +84,11 @@ export default function FollowPage() {
 
               return (
                 <div key={u.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
+                  {/* ✅ TAMBAHKAN clickable area kiri */}
+                  <div
+                    className="flex items-center gap-3 min-w-0 cursor-pointer"
+                    onClick={() => nav(`/u/${u.username}`)}
+                  >
                     <div className="h-10 w-10 rounded-full overflow-hidden bg-zinc-800 flex items-center justify-center shrink-0">
                       <Avatar className="h-10 w-10">
                         <AvatarImage
@@ -95,7 +102,7 @@ export default function FollowPage() {
                     </div>
 
                     <div className="min-w-0">
-                      <div className="font-medium truncate">{u.name}</div>
+                      <div className="font-medium truncate hover:underline">{u.name}</div>
                       <div className="text-sm text-zinc-400 truncate">@{u.username}</div>
                     </div>
                   </div>
@@ -104,12 +111,10 @@ export default function FollowPage() {
                     userId={u.id}
                     isFollowing={isFollowing}
                     onToggle={(next) => {
-                      // ✅ kalau di tab following dan next=false => remove dari list
                       if (tab === "following" && !next) {
                         setLocalList((prev) => prev.filter((x) => x.id !== u.id));
                       }
 
-                      // ✅ kalau di followers tab, cukup patch flag lokal
                       if (tab === "followers") {
                         setLocalList((prev) =>
                           prev.map((x) =>

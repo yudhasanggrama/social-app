@@ -8,12 +8,13 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Link, useNavigate } from "react-router-dom"
-import { useState }from "react"
+import { Link, useNavigate, useLocation } from "react-router-dom"
+import { useEffect, useState, useRef }from "react"
 import type { LoginForm } from "@/Types/auth"
 import { useDispatch } from "react-redux"
 import api from "@/lib/api"
 import { login } from "@/store"
+import { toast } from "sonner"
 
 
 
@@ -24,6 +25,23 @@ export function Login() {
     })
     const dispatch = useDispatch()
     const navigate = useNavigate()
+    const location = useLocation();
+    const shownRef = useRef(false);
+
+    useEffect(() => {
+        if (shownRef.current) return;
+
+        const st = location.state as
+        | { fromRegister?: boolean; message?: string }
+        | null;
+
+        if (st?.fromRegister && st?.message) {
+        shownRef.current = true;
+        toast.success(st.message);
+
+        navigate(location.pathname, { replace: true, state: null });
+        }
+    }, [location, navigate]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setForm({ ...form, [e.target.name]: e.target.value })
@@ -33,21 +51,20 @@ export function Login() {
         e.preventDefault();
 
         try {
-            await api.post("/login", form, { withCredentials: true });
 
-            const meRes = await api.get("/profile", { withCredentials: true });
-
+        await api.post("/login", form, { withCredentials: true });
+        const meRes = await api.get("/profile", { withCredentials: true });
             dispatch(
-            login({
+                login({
                 id: meRes.data.id,
                 name: meRes.data.username,
-            })
+                })
             );
-
+            toast.success("Login berhasil");
             navigate("/", { replace: true });
         } catch (err) {
             console.error(err);
-            alert("Login gagal");
+            toast.error("Login gagal");
         }
     };
 

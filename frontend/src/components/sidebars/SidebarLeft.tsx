@@ -6,53 +6,34 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { logout } from "@/store";
 import type { AppDispatch } from "@/store/types";
+
 import {
-  fetchProfile,
   selectMe,
   selectIsProfileLoading,
-  selectProfileFetchStatus,
   selectAvatarVersion,
 } from "@/store/profile";
+
 import { avatarImgSrc } from "@/lib/image";
-import { useEffect } from "react";
 import { resetAll } from "@/store/index";
 import { socket } from "@/lib/socket";
 
-
-const SidebarLeft = ({onCreatePost}: { onCreatePost: () => void;}) => {
+const SidebarLeft = ({ onCreatePost }: { onCreatePost: () => void }) => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
   const me = useSelector(selectMe);
   const loading = useSelector(selectIsProfileLoading);
-  const fetchStatus = useSelector(selectProfileFetchStatus);
   const v = useSelector(selectAvatarVersion);
-
-  // ✅ FIX: fetch profile juga di SidebarLeft
-  // (kalau kamu sudah punya AppLayout fetch global, ini boleh dihapus)
-  useEffect(() => {
-    if (!me && fetchStatus === "idle") dispatch(fetchProfile());
-  }, [dispatch, me, fetchStatus]);
 
   const handleLogout = async () => {
     try {
-      // 1. backend logout (hapus cookie)
       await api.post("/logout", null, { withCredentials: true });
     } catch {
-      // backend boleh gagal, frontend tetap harus bersih
+      // ignore
     } finally {
-      // 2. putus socket akun lama
-      if (socket.connected) {
-        socket.disconnect();
-      }
-
-      // 3. reset SEMUA redux state (profile, follow, likes, dll)
+      if (socket.connected) socket.disconnect();
       dispatch(resetAll());
-
-      // 4. reset auth
       dispatch(logout());
-
-      // 5. pindah halaman
       navigate("/login", { replace: true });
     }
   };
@@ -69,7 +50,7 @@ const SidebarLeft = ({onCreatePost}: { onCreatePost: () => void;}) => {
       </div>
 
       <div className="flex-1 px-2">
-          <SidebarNav onCreatePost={onCreatePost} />
+        <SidebarNav onCreatePost={onCreatePost} />
       </div>
 
       <div className="border-t border-zinc-800 p-4">

@@ -9,6 +9,7 @@ import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch } from "@/store/types";
 import {
   selectThreadLike,
+  selectThreadLikeMaybe, // ✅ ADDED
   selectLikePending,
   optimisticToggleThread,
   rollbackThread,
@@ -18,6 +19,10 @@ import {
 
 import { publicUrl, avatarImgSrc } from "@/lib/image";
 import { selectAvatarVersion } from "@/store/profile";
+
+// ✅ ADDED
+import { selectMe } from "@/store/profile";
+import type React from "react";
 
 const toNumber = (v: any, fallback = 0) => {
   const n = Number(v);
@@ -29,19 +34,29 @@ export default function PostRow({ thread }: { thread: Thread }) {
   const dispatch = useDispatch<AppDispatch>();
   const v = useSelector(selectAvatarVersion);
 
+  // ✅ ADDED
+  const me = useSelector(selectMe);
+
   const tid = toNumber((thread as any).id, 0);
 
+  // ✅ ADDED: raw store value (undefined kalau belum ada)
+  const likeStateMaybe = useSelector(selectThreadLikeMaybe(tid));
+
+  // selector lama kamu tetap dipakai (tidak dihapus)
   const likeState = useSelector(selectThreadLike(tid));
   const pending = useSelector(selectLikePending(`thread:${tid}`));
 
-  const like = likeState ?? {
+  // ✅ pakai maybe dulu supaya seed benar
+  const like = likeStateMaybe ?? likeState ?? {
     isLiked: Boolean((thread as any).isLiked),
     likesCount: toNumber((thread as any).likes),
   };
 
   useEffect(() => {
     if (!tid) return;
-    if (likeState) return;
+
+    // ✅ kalau store sudah ada, jangan seed ulang
+    if (likeStateMaybe) return;
 
     dispatch(
       setThreadLikeFromServer({
@@ -50,7 +65,7 @@ export default function PostRow({ thread }: { thread: Thread }) {
         likesCount: toNumber((thread as any).likes),
       })
     );
-  }, [dispatch, likeState, tid, thread]);
+  }, [dispatch, likeStateMaybe, tid, thread]);
 
   const images =
     Array.isArray((thread as any).image) && (thread as any).image.length > 0
@@ -76,6 +91,26 @@ export default function PostRow({ thread }: { thread: Thread }) {
     v
   );
 
+  // ✅ ADDED: klik author -> jika diri sendiri => /profile else => /u/:username
+  const onGoToUser = (e: React.MouseEvent | React.KeyboardEvent) => {
+    // @ts-ignore
+    e.stopPropagation?.();
+
+    const uname = author?.username;
+    if (!uname) return;
+
+    const myUsername = (me as any)?.username;
+    const myId = String((me as any)?.id ?? "");
+    const authorId = String(author?.id ?? "");
+
+    if ((myUsername && uname === myUsername) || (myId && authorId && myId === authorId)) {
+      navigate("/profile");
+      return;
+    }
+
+    navigate(`/u/${uname}`);
+  };
+
   return (
     <div
       key={tid || String((thread as any).id)}
@@ -87,7 +122,16 @@ export default function PostRow({ thread }: { thread: Thread }) {
       }}
       className="flex gap-4 border-b border-zinc-800 px-4 py-4 hover:bg-zinc-900/50"
     >
-      <Avatar>
+      {/* ✅ ADDED: avatar clickable */}
+      <Avatar
+        role="button"
+        tabIndex={0}
+        onClick={onGoToUser}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") onGoToUser(e);
+        }}
+        className="cursor-pointer"
+      >
         <AvatarImage src={authorAvatar} />
         <AvatarFallback>
           {(((author?.name?.[0] ?? "U") as string).toUpperCase())}
@@ -96,10 +140,36 @@ export default function PostRow({ thread }: { thread: Thread }) {
 
       <div className="flex-1">
         <div className="flex flex-wrap items-center gap-1 text-sm">
-          <span className="font-semibold text-zinc-100">{author?.name ?? "Unknown"}</span>
+          {/* ✅ ADDED: name clickable */}
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={onGoToUser}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") onGoToUser(e);
+            }}
+            className="font-semibold text-zinc-100 hover:underline"
+          >
+            {author?.name ?? "Unknown"}
+          </span>
+
           <span className="text-zinc-400">
-            @{author?.username ?? "unknown"} ·{" "}
-            {(thread as any).created_at ? new Date((thread as any).created_at).toLocaleString() : ""}
+            {/* ✅ ADDED: username clickable */}
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={onGoToUser}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") onGoToUser(e);
+              }}
+              className="hover:underline"
+            >
+              @{author?.username ?? "unknown"}
+            </span>{" "}
+            ·{" "}
+            {(thread as any).created_at
+              ? new Date((thread as any).created_at).toLocaleString()
+              : ""}
           </span>
         </div>
 

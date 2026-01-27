@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { createThread, getThreadsById, getThreadsFormatted } from "../services/thread";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { io } from "../app";
+import { prisma } from "../prisma/client";
 
 
 export const create = async (req: AuthRequest, res: Response) => {
@@ -90,5 +91,64 @@ export const findMyThreads = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ code: 500, status: "error", message: "Internal server error" });
   }
 };
+
+export async function getThreadsByUserId(req: AuthRequest, res: Response) {
+  try {
+    const viewerId = req.user!.id;
+    const userId = Number(req.params.userId);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ status: "error", message: "Invalid userId" });
+    }
+
+    const threads = await prisma.thread.findMany({
+      where: { created_by: userId }, 
+      orderBy: { created_at: "desc" },
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            full_name: true,
+            photo_profile: true,
+          },
+        },
+        likes: {
+          select: { id: true, user_id: true },
+        },
+      },
+    });
+
+    const mapped = threads.map((t) => {
+      const likesCount = t.likes.length;
+      const isLiked = t.likes.some((l) => l.user_id === viewerId);
+
+      return {
+        id: t.id,
+        content: t.content,
+        image: t.image ?? [],
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+
+        likes: likesCount,               
+        isLiked,                         
+        reply: t.number_of_replies ?? 0, 
+
+        user: {
+          id: String(t.author.id),
+          username: t.author.username,
+          name: t.author.full_name,
+          avatar: t.author.photo_profile ?? "",
+          photo_profile: t.author.photo_profile ?? "", 
+        },
+      };
+    });
+
+    return res.json({ status: "success", data: { threads: mapped } });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ status: "error", message: "Failed to fetch threads" });
+  }
+}
 
 

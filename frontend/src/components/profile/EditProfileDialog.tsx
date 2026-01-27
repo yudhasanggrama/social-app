@@ -1,11 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 
 import api from "@/lib/api";
 import type { AppDispatch } from "@/store/types";
-import { fetchProfile, selectMe } from "@/store/profile";
+import {
+  fetchProfile,
+  selectMe,
+  selectAvatarVersion,
+  setMyAvatar,
+  bumpAvatarVersion,
+} from "@/store/profile";
 import { avatarImgSrc } from "@/lib/image";
+import { notify } from "@/lib/toast";
 
 type EditForm = {
   name: string;
@@ -17,7 +24,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   coverStyle?: React.CSSProperties;
-  onAvatarUpdated?: (newAvatar: string) => void; // optional: sync ke thread list
+  onAvatarUpdated?: (newAvatar: string) => void;
 };
 
 export default function EditProfileDialog({
@@ -28,12 +35,16 @@ export default function EditProfileDialog({
 }: Props) {
   const dispatch = useDispatch<AppDispatch>();
   const me = useSelector(selectMe);
+  const v = useSelector(selectAvatarVersion);
 
   const [form, setForm] = useState<EditForm>({ name: "", username: "", bio: "" });
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string>(avatarImgSrc(me?.avatar));
-  
+
+  const [avatarPreview, setAvatarPreview] = useState<string>(avatarImgSrc(me?.avatar, v));
+  const previewUrlRef = useRef<string | null>(null);
+
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -45,11 +56,18 @@ export default function EditProfileDialog({
     });
 
     setAvatarFile(null);
-    setAvatarPreview(avatarImgSrc(me?.avatar));
-  }, [open, me]);
+    setAvatarPreview(avatarImgSrc(me?.avatar, v));
+
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }, [open, me, v]);
 
   const handleSaveProfile = async () => {
-    try {
+    if (saving) return;
+    setSaving(true);
+    const p = (async () => {
       const fd = new FormData();
       fd.append("name", form.name);
       fd.append("username", form.username);
@@ -69,16 +87,42 @@ export default function EditProfileDialog({
         res.data?.user ??
         res.data;
 
-      const newAvatar: string | undefined = updated?.avatar;
+      const newAvatar: string | undefined =
+        updated?.avatar ?? updated?.photo_profile ?? updated?.profile_picture;
 
-      dispatch(fetchProfile());
+      if (newAvatar) {
+        dispatch(setMyAvatar(newAvatar));
+        dispatch(bumpAvatarVersion());
+        onAvatarUpdated?.(newAvatar);
+      }
 
-      if (newAvatar) onAvatarUpdated?.(newAvatar);
+      await dispatch(fetchProfile()).unwrap();
 
       onOpenChange(false);
-    } catch (e) {
+    })();
+
+    notify.promise(
+      p,
+      {
+        loading: "Menyimpan perubahan...",
+        success: "Profil berhasil diperbarui",
+        error: "Gagal update profile",
+      },
+      { duration: 2500 }
+    );
+
+    try {
+      await p;
+    } catch (e: any) {
       console.error(e);
-      alert("Gagal update profile");
+      // optional: kalau mau tampilkan pesan backend spesifik
+      const msg =
+        e?.response?.data?.message ??
+        e?.response?.data?.error ??
+        "Gagal update profile";
+      notify.error(msg);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -92,16 +136,14 @@ export default function EditProfileDialog({
           <button
             onClick={() => onOpenChange(false)}
             className="rounded-full p-2 hover:bg-zinc-900"
+            disabled={saving}
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="px-5 pb-5">
-          <div
-            className="h-28 w-full rounded-2xl border border-zinc-800"
-            style={coverStyle}
-          />
+          <div className="h-28 w-full rounded-2xl border border-zinc-800" style={coverStyle} />
 
           <div className="-mt-8 relative w-fit">
             <button
@@ -109,10 +151,12 @@ export default function EditProfileDialog({
               onClick={() => fileRef.current?.click()}
               className="group relative"
               title="Ganti foto profil"
+              disabled={saving}
             >
               <img
                 src={avatarPreview}
                 className="h-16 w-16 rounded-full border-4 border-zinc-950 object-cover"
+                alt="avatar-preview"
               />
               <div className="absolute inset-0 rounded-full bg-black/40" />
               <div className="absolute inset-0 flex items-center justify-center">
@@ -128,8 +172,13 @@ export default function EditProfileDialog({
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+
                 setAvatarFile(file);
-                setAvatarPreview(URL.createObjectURL(file));
+
+                if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+                const url = URL.createObjectURL(file);
+                previewUrlRef.current = url;
+                setAvatarPreview(url);
               }}
             />
           </div>
@@ -141,6 +190,7 @@ export default function EditProfileDialog({
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-600"
+                disabled={saving}
               />
             </div>
 
@@ -148,10 +198,9 @@ export default function EditProfileDialog({
               <label className="mb-1 block text-xs text-zinc-400">Username</label>
               <input
                 value={form.username}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, username: e.target.value }))
-                }
+                onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
                 className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-600"
+                disabled={saving}
               />
             </div>
 
@@ -162,15 +211,17 @@ export default function EditProfileDialog({
                 onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))}
                 rows={4}
                 className="w-full resize-none rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-600"
+                disabled={saving}
               />
             </div>
 
             <div className="flex justify-end pt-2">
               <button
-                className="rounded-full bg-green-500 px-6 py-2 text-sm font-semibold text-black hover:bg-green-600"
+                className="rounded-full bg-green-500 px-6 py-2 text-sm font-semibold text-black hover:bg-green-600 disabled:opacity-60"
                 onClick={handleSaveProfile}
+                disabled={saving}
               >
-                Save
+                {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

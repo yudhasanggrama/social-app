@@ -86,3 +86,51 @@ export const updateMyProfile = async (userId: number, input: UpdateProfileInput)
         updated_at: user.updated_at,
     };
 };
+
+
+export async function getUserProfileByUsernameService(params: {
+    viewerId: number;
+    username: string;
+    }) {
+    const { viewerId, username } = params;
+
+    const user = await prisma.user.findUnique({
+        where: { username },
+        select: {
+        id: true,
+        username: true,
+        full_name: true,
+        photo_profile: true,
+        bio: true,
+        },
+    });
+
+    if (!user) {
+        return { success: false as const, reason: "USER_NOT_FOUND" as const };
+    }
+
+    const [followersCount, followingCount, rel] = await Promise.all([
+        prisma.following.count({ where: { following_id: user.id } }),
+        prisma.following.count({ where: { follower_id: user.id } }),
+        prisma.following.findFirst({
+        where: { follower_id: viewerId, following_id: user.id },
+        select: { id: true },
+        }),
+    ]);
+
+    return {
+        success: true as const,
+        data: {
+        id: String(user.id),
+        username: user.username,
+        name: user.full_name,
+        avatar: user.photo_profile ?? "",
+        bio: user.bio ?? "",
+        follower_count: followersCount,
+        following_count: followingCount,
+        is_following: Boolean(rel),
+        },
+    };
+}
+
+

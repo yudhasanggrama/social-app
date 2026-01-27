@@ -9,11 +9,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ImagePlus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useFlashMessage } from "@/hooks/useFlashMessage";
 import api from "@/lib/api";
 import { useSelector } from "react-redux";
 import { selectMe, selectAvatarVersion } from "@/store/profile";
 import { avatarImgSrc } from "@/lib/image";
+import { toast } from "sonner";
 
 type QueueItem = {
   id: string;
@@ -24,25 +24,27 @@ type QueueItem = {
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  afterPosted?: () => void | Promise<void>; // optional: buat refresh list, emit, dll.
+  afterPosted?: () => void | Promise<void>;
 };
+
+const MAX_IMAGES = 6;
 
 const CreatePostDialog = ({ open, onOpenChange, afterPosted }: Props) => {
   const [content, setContent] = useState("");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
-  const { show } = useFlashMessage();
 
   const me = useSelector(selectMe);
   const v = useSelector(selectAvatarVersion);
   const myAvatar = avatarImgSrc(me?.avatar, v);
   const fallback = (me?.name?.[0] ?? "U").toUpperCase();
 
+  // --- inline messages (pushMsg) untuk PREVIEW / aksi lokal ---
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const pushMsg = (type: QueueItem["type"], text: string) => {
     const id = crypto.randomUUID();
     setQueue((q) => [...q, { id, type, text }]);
-    setTimeout(() => setQueue((q) => q.filter((m) => m.id !== id)), 3500);
+    setTimeout(() => setQueue((q) => q.filter((m) => m.id !== id)), 2500);
   };
 
   // reset ketika dialog ditutup
@@ -68,34 +70,62 @@ const CreatePostDialog = ({ open, onOpenChange, afterPosted }: Props) => {
     pushMsg("info", "Image removed.");
   };
 
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files ?? []);
+    e.currentTarget.value = "";
+    if (picked.length === 0) return;
+
+    const images = picked.filter((f) => f.type.startsWith("image/"));
+    if (images.length === 0) {
+      pushMsg("error", "Please select an image file.");
+      return;
+    }
+
+    // hitung hasil final tanpa side-effect di updater
+    const prevCount = imageFiles.length;
+    const merged = [...imageFiles, ...images];
+    const limited = merged.slice(0, MAX_IMAGES);
+
+    setImageFiles(limited);
+
+    const added = Math.max(0, limited.length - prevCount);
+    if (merged.length > MAX_IMAGES) {
+      pushMsg("info", `Max ${MAX_IMAGES} images. Extra images ignored.`);
+    } else {
+      pushMsg("info", `${added} image(s) added.`);
+    }
+  };
+
   const handleSubmit = async () => {
+    if (loading) return;
     if (!content.trim() && imageFiles.length === 0) return;
 
+    setLoading(true);
+
+    const formData = new FormData();
+    formData.append("content", content);
+    imageFiles.forEach((file) => formData.append("images", file));
+
+    const req = api.post("/threads", formData, {
+      withCredentials: true,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
     try {
-      setLoading(true);
-
-      const formData = new FormData();
-      formData.append("content", content);
-      imageFiles.forEach((file) => formData.append("images", file));
-
-      if (imageFiles.length > 0) {
-        pushMsg("info", `Uploading ${imageFiles.length} image(s).`);
-      }
-
-      await api.post("/threads", formData, {
-        withCredentials: true,
-        headers: { "Content-Type": "multipart/form-data" },
+      toast.promise(req, {
+        loading: "Posting...",
+        success: "Posted successfully ✅",
+        error: (e) => {
+          const msg = e?.response?.data?.message ||
+            e?.message ||
+            "Failed to post";
+          return msg;
+        },
       });
 
-      show("success", "Add new posting");
-
-      // optional hook
       await afterPosted?.();
-
-      // tutup dialog
       onOpenChange(false);
-    } catch (e: any) {
-      pushMsg("error", e?.message ?? "Error");
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -114,6 +144,7 @@ const CreatePostDialog = ({ open, onOpenChange, afterPosted }: Props) => {
           </VisuallyHidden>
         </DialogHeader>
 
+        {/* inline preview messages */}
         {queue.length > 0 && (
           <div className="mb-4 space-y-2">
             {queue.map((m) => (
@@ -134,10 +165,12 @@ const CreatePostDialog = ({ open, onOpenChange, afterPosted }: Props) => {
         )}
 
         <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleSubmit();}}>
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSubmit();
+          }}
+        >
           <div className="flex gap-4 border-b w-full pb-4">
             <Avatar>
               <AvatarImage src={myAvatar} />
@@ -145,19 +178,19 @@ const CreatePostDialog = ({ open, onOpenChange, afterPosted }: Props) => {
             </Avatar>
 
             <input
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (!loading) handleSubmit();
-                  }
-                }}
-                type="text"
-                placeholder="What is happening?!"
-                className="w-full bg-transparent text-lg placeholder:text-zinc-500 focus:outline-none"
-                disabled={loading}
-              />
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!loading) handleSubmit();
+                }
+              }}
+              type="text"
+              placeholder="What is happening?!"
+              className="w-full bg-transparent text-lg placeholder:text-zinc-500 focus:outline-none"
+              disabled={loading}
+            />
           </div>
 
           {previewUrls.length > 0 && (
@@ -195,13 +228,7 @@ const CreatePostDialog = ({ open, onOpenChange, afterPosted }: Props) => {
                 multiple
                 accept="image/*"
                 disabled={loading}
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  if (files.length === 0) return;
-                  setImageFiles((prev) => [...prev, ...files]);
-                  pushMsg("info", `${files.length} image(s) added`);
-                  e.currentTarget.value = "";
-                }}
+                onChange={onPickFiles}
               />
               <ImagePlus className="h-5 w-5" />
             </label>
