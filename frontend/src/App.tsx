@@ -18,6 +18,7 @@ import MyProfilePage from "./pages/MyProfilePage";
 
 import { Toaster } from "sonner";
 import UserProfilePage from "./pages/UserProfilePage";
+import UserFollowPage from "./pages/UserFollowPage";
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
@@ -62,6 +63,9 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/thread/:id" element={<ThreadDetailPage />} />
             <Route path="/follow" element={<FollowPage />} />
+            <Route path="/follows" element={<FollowPage />} />
+            <Route path="/u/:username/follow" element={<UserFollowPage />} />
+            <Route path="/u/:username/follows" element={<UserFollowPage />} />
             <Route path="/profile" element={<MyProfilePage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/u/:username" element={<UserProfilePage />} />

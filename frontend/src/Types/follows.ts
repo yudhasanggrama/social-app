@@ -11,6 +11,10 @@ export type ApiError = { status: "error"; message: string };
 
 export type GetFollowersRes = ApiSuccess<{ followers: FollowUserItem[] }> | ApiError;
 export type GetSuggestedRes = ApiSuccess<{ users: FollowUserItem[] }> | ApiError;
+export type GetFollowListRes =
+  | ApiSuccess<{ followers?: FollowUserItem[]; following?: FollowUserItem[] }>
+  | ApiError;
+
 
 export type FollowActionRes =
   | ApiSuccess<{ user_id: string; is_following: boolean }>

@@ -16,6 +16,7 @@ export type UserResponse = {
   name: string;
   avatar: string;
 };
+
 // user response + status follow
 export type FollowerResponse = UserResponse & {
   is_following: boolean;
@@ -28,8 +29,6 @@ export type GetFollowListInput = {
 };
 
 // input aksi follow/unfollow
-// userId = user yang melakukan aksi
-// targetUserId = user yang difollow / unfollow
 export type FollowUserInput = { userId: number; targetUserId: number };
 export type UnfollowUserInput = { userId: number; targetUserId: number };
 
@@ -38,11 +37,23 @@ export type FollowActionResult =
   | { success: true }
   | { success: false; reason: "USER_NOT_FOUND" };
 
-//payload untuk websocket (realtime follow/unfollow) 
+// payload untuk websocket (realtime follow/unfollow)
 export type SocketFollowChangedPayload = {
   followerId: number;
   targetUserId: number;
   isFollowing: boolean;
   followerUser?: UserResponse;
   targetUser?: UserResponse;
+};
+
+export type GetFollowListForUserInput = {
+  targetUserId: number;
+  viewerUserId: number;
+  type: FollowQueryType; // "followers" | "following"
+};
+
+export type GetFollowListForUserServiceInput = {
+  targetUserId: number;
+  viewerUserId: number;
+  type: FollowQueryType;
 };

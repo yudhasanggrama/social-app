@@ -4,6 +4,7 @@ import * as ReplyController from "../../controllers/reply-controller";
 import upload from "../../middleware/upload";
 import { cacheGet, invalidateAfter } from "../../lib/cache";
 import { cacheKeys } from "../../lib/cacheKey";
+import { threadId } from "worker_threads";
 
 const router = express.Router();
 
@@ -41,21 +42,29 @@ router.use(authMiddleware);
  */
 router.post(
   "/replies",
-  upload.array("image", 10),
-  invalidateAfter((req: any) => {
-    const threadId = String(req.body.thread_id ?? "");
+  upload.array("images", 10),
+  invalidateAfter((req) => {
+    const threadId = (req as any)?.body?.thread_id;
+
+    if (!threadId) {
+      return [
+        "threads:feed:page:*",
+        "threads:user:*",
+        "threads:detail:*",
+        "replies:thread:*",
+      ];
+    }
 
     return [
-      cacheKeys.repliesByThread(threadId),
-      cacheKeys.threadDetail(threadId),
       "threads:feed:page:*",
-
       "threads:user:*",
-      "threads:me:*",
+      cacheKeys.threadDetail(threadId),
+      cacheKeys.repliesByThread(threadId),
     ];
   }),
   ReplyController.create
 );
+
 
 /**
  * @openapi
