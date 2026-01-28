@@ -50,7 +50,6 @@ router.post(
       cacheKeys.threadDetail(threadId),
       "threads:feed:page:*",
 
-      // ✅ TAMBAHAN (ini yang bikin UserProfile/MyProfile langsung benar saat balik)
       "threads:user:*",
       "threads:me:*",
     ];
