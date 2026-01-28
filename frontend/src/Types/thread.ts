@@ -6,6 +6,7 @@ export interface ThreadUser {
 }
 
 export interface Thread {
+  [x: string]: any;
   id: number;
   content: string;
   created_at: string;

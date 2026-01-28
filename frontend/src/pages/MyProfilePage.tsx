@@ -40,6 +40,26 @@ const toNumber = (v: any, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+/**
+ * ✅ Tambahan aman:
+ * PostRow kamu baca thread.reply
+ * Jadi kita pastikan reply ada dari berbagai bentuk response backend.
+ */
+const seedReplyField = (t: any) => {
+  const replyCount = toNumber(
+    t?.reply ??
+      t?.replies_count ??
+      t?.reply_count ??
+      t?._count?.replies ??
+      (Array.isArray(t?.replies) ? t.replies.length : 0) ??
+      0,
+    0
+  );
+
+  // tidak mengubah field lain—hanya memastikan reply ada
+  return { ...t, reply: replyCount };
+};
+
 export default function MyProfilePage() {
   const dispatch = useDispatch<AppDispatch>();
 
@@ -53,7 +73,7 @@ export default function MyProfilePage() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
 
-  const nav = useNavigate()
+  const nav = useNavigate();
 
   const displayName = me?.name ?? "Guest";
   const fallback = (displayName?.[0] ?? "U").toUpperCase();
@@ -73,10 +93,14 @@ export default function MyProfilePage() {
       try {
         const res = await api.get("/threads/me", { withCredentials: true });
         const list: Thread[] = res.data?.data?.threads ?? res.data?.threads ?? [];
-        setThreads(list);
+
+        // ✅ seed reply field (aman)
+        const seeded = (list ?? []).map(seedReplyField) as any;
+
+        setThreads(seeded);
 
         // ✅ REST seed: isLiked + likesCount
-        list.forEach((t: any) => {
+        seeded.forEach((t: any) => {
           dispatch(
             setThreadLikeFromServer({
               threadId: toNumber(t.id),
@@ -98,72 +122,143 @@ export default function MyProfilePage() {
 
   // socket sync
   useEffect(() => {
-  if (!me?.id) return;
+    if (!me?.id) return;
 
-  const onThreadCreated = (payload: any) => {
-    const t: any = payload?.thread ?? payload;
-    if (!t?.id) return;
+    const onThreadCreated = (payload: any) => {
+      const t: any = payload?.thread ?? payload;
+      if (!t?.id) return;
 
-    // thread bisa punya author di `user` atau `User` tergantung format backend
-    const authorId =
-      toNumber(t?.user?.id ?? t?.User?.id ?? t?.user_id ?? t?.userId, 0);
+      // thread bisa punya author di `user` atau `User` tergantung format backend
+      const authorId = toNumber(t?.user?.id ?? t?.User?.id ?? t?.user_id ?? t?.userId, 0);
 
-    // ✅ ini halaman "My Profile" => hanya tambah kalau thread milik saya
-    if (authorId !== toNumber(me.id)) return;
+      // ✅ ini halaman "My Profile" => hanya tambah kalau thread milik saya
+      if (authorId !== toNumber(me.id)) return;
 
-    setThreads((prev) => {
-      const exists = prev.some((x: any) => toNumber(x.id) === toNumber(t.id));
-      if (exists) return prev;
-      return [t as Thread, ...prev];
-    });
+      const seeded = seedReplyField(t);
 
-    // seed likes store biar UI like konsisten
-    dispatch(
-      setThreadLikeFromServer({
-        threadId: toNumber(t.id),
-        isLiked: Boolean(t.isLiked),
-        likesCount: toNumber(t.likes ?? 0),
-      })
-    );
-  };
+      setThreads((prev) => {
+        const exists = prev.some((x: any) => toNumber(x.id) === toNumber(seeded.id));
+        if (exists) return prev;
+        return [seeded as Thread, ...prev];
+      });
 
-  const onLikeUpdated = (payload: LikeUpdatedPayload) => {
-    const rawThreadId = payload.threadId ?? payload.id;
-    const threadId = toNumber(rawThreadId, 0);
-    if (!threadId) return;
+      // seed likes store biar UI like konsisten
+      dispatch(
+        setThreadLikeFromServer({
+          threadId: toNumber(seeded.id),
+          isLiked: Boolean((seeded as any).isLiked),
+          likesCount: toNumber((seeded as any).likes ?? 0),
+        })
+      );
+    };
 
-    const likesCount =
-      payload.likesCount !== undefined
-        ? toNumber(payload.likesCount)
-        : payload.likes !== undefined
-        ? toNumber(payload.likes)
-        : undefined;
+    const onLikeUpdated = (payload: LikeUpdatedPayload) => {
+      const rawThreadId = payload.threadId ?? payload.id;
+      const threadId = toNumber(rawThreadId, 0);
+      if (!threadId) return;
 
-    setThreads((prev) =>
-      prev.map((t: any) => {
-        if (toNumber(t.id) !== threadId) return t;
-        const next: any = { ...t };
-        if (likesCount !== undefined) next.likes = likesCount;
-        if (typeof payload.isLiked === "boolean") next.isLiked = payload.isLiked;
-        return next;
-      })
-    );
+      const likesCount =
+        payload.likesCount !== undefined
+          ? toNumber(payload.likesCount)
+          : payload.likes !== undefined
+          ? toNumber(payload.likes)
+          : undefined;
 
-    const patch: any = { threadId };
-    if (likesCount !== undefined) patch.likesCount = likesCount;
-    if (typeof payload.isLiked === "boolean") patch.isLiked = payload.isLiked;
+      setThreads((prev) =>
+        prev.map((t: any) => {
+          if (toNumber(t.id) !== threadId) return t;
+          const next: any = { ...t };
+          if (likesCount !== undefined) next.likes = likesCount;
+          if (typeof payload.isLiked === "boolean") next.isLiked = payload.isLiked;
+          return next;
+        })
+      );
 
-    dispatch(setThreadLikeFromServer(patch));
-  };
+      const patch: any = { threadId };
+      if (likesCount !== undefined) patch.likesCount = likesCount;
+      if (typeof payload.isLiked === "boolean") patch.isLiked = payload.isLiked;
 
-  socket.on("thread:created", onThreadCreated);
-  socket.on("thread:like_updated", onLikeUpdated);
+      dispatch(setThreadLikeFromServer(patch));
+    };
 
-  return () => {
-    socket.off("thread:created", onThreadCreated);
-    socket.off("thread:like_updated", onLikeUpdated);
-  };
-}, [dispatch, me?.id]);
+    /**
+     * ✅ Tambahan: realtime reply count via socket langsung
+     * Payload kamu: { threadId, reply: {..., thread_id} }
+     */
+    const onReplyCreated = (payload: any) => {
+      const reply = payload?.reply ?? payload;
+      const tid = String(reply?.thread_id ?? payload?.threadId ?? reply?.threadId ?? "");
+      if (!tid) return;
+
+      setThreads((prev) =>
+        prev.map((t: any) => {
+          if (String(t?.id) !== tid) return t;
+
+          const cur = toNumber(t?.reply, 0);
+          const next = cur + 1;
+
+          return {
+            ...t,
+            reply: next,
+            replies_count:
+              t?.replies_count != null ? toNumber(t.replies_count, cur) + 1 : t?.replies_count,
+            reply_count:
+              t?.reply_count != null ? toNumber(t.reply_count, cur) + 1 : t?.reply_count,
+            _count:
+              t?._count?.replies != null
+                ? { ...(t._count ?? {}), replies: toNumber(t._count.replies, cur) + 1 }
+                : t?._count,
+          };
+        })
+      );
+    };
+
+    socket.on("thread:created", onThreadCreated);
+    socket.on("thread:like_updated", onLikeUpdated);
+    socket.on("reply:created", onReplyCreated);
+
+    return () => {
+      socket.off("thread:created", onThreadCreated);
+      socket.off("thread:like_updated", onLikeUpdated);
+      socket.off("reply:created", onReplyCreated);
+    };
+  }, [dispatch, me?.id]);
+
+  /**
+   * ✅ Tambahan: realtime reply count via window event bus
+   * Kalau kamu pakai useReplySocket() global di AppLayout.
+   */
+  useEffect(() => {
+    const handler = (e: any) => {
+      const tid = String(e?.detail?.threadId ?? "");
+      if (!tid) return;
+
+      setThreads((prev) =>
+        prev.map((t: any) => {
+          if (String(t?.id) !== tid) return t;
+
+          const cur = toNumber(t?.reply, 0);
+          const next = cur + 1;
+
+          return {
+            ...t,
+            reply: next,
+            replies_count:
+              t?.replies_count != null ? toNumber(t.replies_count, cur) + 1 : t?.replies_count,
+            reply_count:
+              t?.reply_count != null ? toNumber(t.reply_count, cur) + 1 : t?.reply_count,
+            _count:
+              t?._count?.replies != null
+                ? { ...(t._count ?? {}), replies: toNumber(t._count.replies, cur) + 1 }
+                : t?._count,
+          };
+        })
+      );
+    };
+
+    window.addEventListener("app:reply_created", handler as any);
+    return () => window.removeEventListener("app:reply_created", handler as any);
+  }, []);
 
   const mediaImages = useMemo(() => {
     const all: string[] = [];
@@ -284,10 +379,7 @@ export default function MyProfilePage() {
           <div className="pt-4">
             <div className="grid grid-cols-3 gap-2 px-2 pb-6">
               {mediaImages.map((src, i) => (
-                <div
-                  key={`${src}-${i}`}
-                  className="overflow-hidden rounded-xl border border-zinc-800"
-                >
+                <div key={`${src}-${i}`} className="overflow-hidden rounded-xl border border-zinc-800">
                   <img src={src} alt={`media-${i}`} className="aspect-square w-full object-cover" />
                 </div>
               ))}

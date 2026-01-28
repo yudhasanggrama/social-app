@@ -72,7 +72,7 @@ export const createReply = async (
     image: r.image ?? [],
     user: {
       id: r.users.id,
-      username: r.users.username,
+      username: r.users.username, 
       name: r.users.full_name,
       profile_picture: r.users.photo_profile,
     },

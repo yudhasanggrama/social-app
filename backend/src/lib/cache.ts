@@ -43,46 +43,48 @@ export const cacheGet =
  *   - pattern:    "threads:feed:page:*"
  */
 export const invalidateAfter =
-    <P = Record<string, string>>(
-        keyOrPatternsFn: (req: Request<P>, res: Response) => string | string[]
-    ) =>
-    (req: Request<P>, res: Response, next: NextFunction) => {
-        const cleanup = async () => {
-        if (!(res.statusCode >= 200 && res.statusCode < 300)) return;
+  <P = Record<string, string>>(
+    keyOrPatternsFn: (req: Request<P>, res: Response) => string | string[] | Promise<string | string[]>
+  ) =>
+  (req: Request<P>, res: Response, next: NextFunction) => {
+    const cleanup = async () => {
+      if (!(res.statusCode >= 200 && res.statusCode < 300)) return;
 
-        const items = keyOrPatternsFn(req, res);
+      try {
+        const items = await keyOrPatternsFn(req, res); // ✅ await
         const list = Array.isArray(items) ? items : [items];
 
-        try {
-            for (const item of list) {
-                if (item.includes("*")) {
-                    let cursor = "0";
+        for (const item of list) {
+          if (!item) continue;
 
-                    do {
-                        const { cursor: nextCursor, keys } = await redis.scan(cursor, {
-                            MATCH: item,
-                            COUNT: 200,
-                        });
+          if (item.includes("*")) {
+            let cursor = "0";
 
-                        cursor = nextCursor;
+            do {
+              const { cursor: nextCursor, keys } = await redis.scan(cursor, {
+                MATCH: item,
+                COUNT: 200,
+              });
 
-                        if (keys.length > 0) {
-                            await redis.del(keys);
-                        }
-                    } while (cursor !== "0");
-                } else {
-                    await redis.del(item);
-                }
+              cursor = nextCursor;
+
+              if (keys.length > 0) {
+                await redis.del(keys);
+              }
+            } while (cursor !== "0");
+          } else {
+            await redis.del(item);
+          }
         }
-        } catch (err) {
-            console.warn("Redis invalidate error:", err);
-        }
-        };
+      } catch (err) {
+        console.warn("Redis invalidate error:", err);
+      }
+    };
 
-        res.on("finish", () => {
-        cleanup().catch(() => {});
-        });
+    res.on("finish", () => {
+      cleanup().catch(() => {});
+    });
 
-        next();
-};
+    next();
+  };
 

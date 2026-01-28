@@ -79,6 +79,7 @@ io.use((socket, next) => {
     if (!secret) return next(new Error("JWT_SECRET not set"));
 
     const payload = jwt.verify(token, secret);
+
     // simpan payload supaya bisa dipakai di event handler
     (socket.data as any).user = payload;
 
@@ -89,8 +90,37 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  // contoh join room feed
+  // ✅ join room feed
   socket.join("feed");
+
+  // ✅ AUTO JOIN room user:<id> (supaya io.to(`user:${id}`).emit nyampe)
+  const u = (socket.data as any).user;
+
+  // coba ambil id dari beberapa kemungkinan field
+  const myIdRaw = (u as any)?.id ?? (u as any)?.userId ?? (u as any)?.sub ?? 0;
+  const myId = Number(myIdRaw);
+
+  if (Number.isFinite(myId) && myId > 0) {
+    socket.join(`user:${myId}`);
+    console.log("✅ joined room:", `user:${myId}`, "socket:", socket.id);
+  } else {
+    console.log("⚠️ socket connected but user id missing in JWT payload:", u);
+  }
+
+  // ✅ OPTIONAL: allow explicit join from client (berguna kalau mau)
+  socket.on("user:join", ({ userId }) => {
+    const uid = Number(userId);
+    if (!Number.isFinite(uid) || uid <= 0) return;
+    socket.join(`user:${uid}`);
+    console.log("✅ user:join:", `user:${uid}`, "socket:", socket.id);
+  });
+
+  socket.on("user:leave", ({ userId }) => {
+    const uid = Number(userId);
+    if (!Number.isFinite(uid) || uid <= 0) return;
+    socket.leave(`user:${uid}`);
+    console.log("✅ user:leave:", `user:${uid}`, "socket:", socket.id);
+  });
 
   // contoh event
   socket.on("ping", () => {
@@ -98,4 +128,4 @@ io.on("connection", (socket) => {
   });
 });
 
-export default app;
+export default server;

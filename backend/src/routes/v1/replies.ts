@@ -40,17 +40,22 @@ router.use(authMiddleware);
  *       200: { description: OK }
  */
 router.post(
-    "/replies",
-    upload.array("image", 10),
-    invalidateAfter((req: any) => {
-        const threadId = String(req.body.thread_id ?? "");
-        return [
-        cacheKeys.repliesByThread(threadId),
-        cacheKeys.threadDetail(threadId),
-        "threads:feed:page:*",
-        ];
-    }),
-    ReplyController.create
+  "/replies",
+  upload.array("image", 10),
+  invalidateAfter((req: any) => {
+    const threadId = String(req.body.thread_id ?? "");
+
+    return [
+      cacheKeys.repliesByThread(threadId),
+      cacheKeys.threadDetail(threadId),
+      "threads:feed:page:*",
+
+      // ✅ TAMBAHAN (ini yang bikin UserProfile/MyProfile langsung benar saat balik)
+      "threads:user:*",
+      "threads:me:*",
+    ];
+  }),
+  ReplyController.create
 );
 
 /**

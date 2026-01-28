@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, MessageCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -18,10 +18,7 @@ import {
 } from "@/store/likes";
 
 import { publicUrl, avatarImgSrc } from "@/lib/image";
-import { selectAvatarVersion } from "@/store/profile";
-
-// ✅ ADDED
-import { selectMe } from "@/store/profile";
+import { selectAvatarVersion, selectMe } from "@/store/profile";
 import type React from "react";
 
 const toNumber = (v: any, fallback = 0) => {
@@ -34,7 +31,6 @@ export default function PostRow({ thread }: { thread: Thread }) {
   const dispatch = useDispatch<AppDispatch>();
   const v = useSelector(selectAvatarVersion);
 
-  // ✅ ADDED
   const me = useSelector(selectMe);
 
   const tid = toNumber((thread as any).id, 0);
@@ -47,10 +43,12 @@ export default function PostRow({ thread }: { thread: Thread }) {
   const pending = useSelector(selectLikePending(`thread:${tid}`));
 
   // ✅ pakai maybe dulu supaya seed benar
-  const like = likeStateMaybe ?? likeState ?? {
-    isLiked: Boolean((thread as any).isLiked),
-    likesCount: toNumber((thread as any).likes),
-  };
+  const like =
+    likeStateMaybe ??
+    likeState ?? {
+      isLiked: Boolean((thread as any).isLiked),
+      likesCount: toNumber((thread as any).likes),
+    };
 
   useEffect(() => {
     if (!tid) return;
@@ -67,10 +65,13 @@ export default function PostRow({ thread }: { thread: Thread }) {
     );
   }, [dispatch, likeStateMaybe, tid, thread]);
 
-  const images =
-    Array.isArray((thread as any).image) && (thread as any).image.length > 0
-      ? (thread as any).image.map((p: string) => publicUrl(p)).filter(Boolean)
-      : [];
+  const images = useMemo(() => {
+    const raw = (thread as any)?.image;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map((p: string) => publicUrl(p)).filter(Boolean);
+    }
+    return [];
+  }, [thread]);
 
   const onToggleLike = async () => {
     if (!tid) return;
@@ -110,6 +111,24 @@ export default function PostRow({ thread }: { thread: Thread }) {
 
     navigate(`/u/${uname}`);
   };
+
+  /**
+   * ✅ ADDED: reply count robust
+   * - tetap prioritas thread.reply (karena kamu sudah seed di beberapa page)
+   * - fallback ke replies_count / reply_count / _count.replies
+   */
+  const replyCount = useMemo(() => {
+    const t: any = thread as any;
+    return toNumber(
+      t?.reply ??
+        t?.replies_count ??
+        t?.reply_count ??
+        t?._count?.replies ??
+        (Array.isArray(t?.replies) ? t.replies.length : 0) ??
+        0,
+      0
+    );
+  }, [thread]);
 
   return (
     <div
@@ -167,15 +186,13 @@ export default function PostRow({ thread }: { thread: Thread }) {
               @{author?.username ?? "unknown"}
             </span>{" "}
             ·{" "}
-            {(thread as any).created_at
-              ? new Date((thread as any).created_at).toLocaleString()
-              : ""}
+            {(thread as any).created_at ? new Date((thread as any).created_at).toLocaleString() : ""}
           </span>
         </div>
 
         <p className="mt-1 text-sm leading-relaxed text-zinc-200">{(thread as any).content}</p>
 
-        {images.length > 0 && <ThreadImages images={images} />}
+        {images.length > 0 && <ThreadImages images={images as any} />}
 
         <div className="mt-3 flex items-center gap-8 text-sm text-zinc-400">
           <button
@@ -200,7 +217,7 @@ export default function PostRow({ thread }: { thread: Thread }) {
             className="flex items-center gap-1 hover:text-zinc-200"
           >
             <MessageCircle className="h-4 w-4" />
-            <span>{(thread as any).reply ?? 0}</span>
+            <span>{replyCount}</span>
           </button>
         </div>
       </div>

@@ -17,8 +17,10 @@ import {
   selectIsProfileLoading,
   selectProfileFetchStatus,
 } from "@/store/profile";
+import { useReplySocket } from "@/hooks/useReplySocket";
 
 export default function AppLayout() {
+  useReplySocket();
   useFollowSocket();
   useLikeSocket();
 

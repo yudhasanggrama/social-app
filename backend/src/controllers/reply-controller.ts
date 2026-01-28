@@ -21,6 +21,9 @@ export const create = async (req: AuthRequest, res: Response) => {
     const images: string[] = files.map((f) => `uploads/${f.filename}`);
 
     const reply = await createReply(req.user!.id, threadId, content ?? "", images);
+    io.emit("reply:created", {
+      threadId, reply: {...reply, thread_id: threadId}
+    })
     return res.status(200).json({ reply });
   } catch (err) {
     console.error("[createReply] error:", err);
