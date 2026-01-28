@@ -30,7 +30,7 @@ const SidebarRight = ({ onEditProfile }: { onEditProfile: () => void }) => {
   const location = useLocation();
   const isProfilePage = location.pathname.startsWith("/profile");
 
-  // ✅ suggested masih boleh fetch di sini (karena ini memang data sidebar)
+  // suggested masih boleh fetch di sini (karena ini memang data sidebar)
   useEffect(() => {
     if (!me?.id) return;
     dispatch(fetchSuggestedThunk(5));

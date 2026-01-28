@@ -44,6 +44,7 @@ export function Login() {
     }, [location, navigate]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // menyalin state lama form, lalu ambil nilai input, cari field sesuai name
         setForm({ ...form, [e.target.name]: e.target.value })
     }
 

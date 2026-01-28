@@ -17,8 +17,6 @@ export async function handleRegister(req: Request, res: Response) {
     } catch (err) {
         return res.status(500).json({message: "Internal server error"});
     }
-
-
 }
 
 export async function handleLogin(req: Request, res: Response) {

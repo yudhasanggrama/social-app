@@ -28,7 +28,7 @@ const toNumber = (v: any, fallback = 0) => {
 };
 
 /**
- * ✅ Tambahan: PostRow kamu baca (thread as any).reply
+ * Tambahan: PostRow kamu baca (thread as any).reply
  * Jadi kita "seed" field reply dari variasi field backend.
  */
 const seedReplyField = (t: any) => {
@@ -85,7 +85,7 @@ export default function UserProfilePage() {
   }, [isMe, nav]);
 
   /**
-   * ✅ Tambahan: fetch function biar bisa dipakai ulang (refetch on focus + manual trigger)
+   * Tambahan: fetch function biar bisa dipakai ulang (refetch on focus + manual trigger)
    */
   const fetchThreads = useCallback(async () => {
     if (!profile?.id) return;
@@ -107,8 +107,7 @@ export default function UserProfilePage() {
   }, [fetchThreads]);
 
   /**
-   * ✅ Tambahan: refetch saat balik dari ThreadDetailPage / tab aktif lagi
-   * Ini yang bikin "refresh dari ThreadDetailPage" benar-benar ngaruh.
+   * Tambahan: refetch saat balik dari ThreadDetailPage / tab aktif lagi
    */
   useEffect(() => {
     if (!profile?.id) return;

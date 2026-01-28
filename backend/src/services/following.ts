@@ -16,7 +16,7 @@ export type EmitFollowChangedParams = {
   isFollowing: boolean;
 };
 
-
+// Memisahkan internal DB concern dari external API contract
 function toUserResponse(u: UserDbModel): UserResponse {
   return {
     id: String(u.id),
@@ -133,6 +133,7 @@ export async function isFollowingService(input: { userId: number; targetUserId: 
     select: { id: true },
   });
 
+  // mengubah nilai apapun menjadi boolean murni isFollow : row bisa object bisa null jika tidak ada
   return { isFollowing: !!row };
 }
 

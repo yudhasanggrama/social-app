@@ -9,7 +9,7 @@ import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch } from "@/store/types";
 import {
   selectThreadLike,
-  selectThreadLikeMaybe, // ✅ ADDED
+  selectThreadLikeMaybe,
   selectLikePending,
   optimisticToggleThread,
   rollbackThread,
@@ -37,8 +37,6 @@ export default function PostRow({ thread }: { thread: Thread }) {
 
   // ✅ ADDED: raw store value (undefined kalau belum ada)
   const likeStateMaybe = useSelector(selectThreadLikeMaybe(tid));
-
-  // selector lama kamu tetap dipakai (tidak dihapus)
   const likeState = useSelector(selectThreadLike(tid));
   const pending = useSelector(selectLikePending(`thread:${tid}`));
 

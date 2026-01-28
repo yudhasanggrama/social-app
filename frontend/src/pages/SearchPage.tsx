@@ -22,7 +22,7 @@ const clampFollowers = (n: number) => (n < 0 ? 0 : n);
 
 export default function SearchPage() {
   const v = useSelector(selectAvatarVersion);
-  const nav = useNavigate(); // ✅ TAMBAHKAN
+  const nav = useNavigate();
 
   const [keyword, setKeyword] = useState("");
   const [debounced, setDebounced] = useState("");

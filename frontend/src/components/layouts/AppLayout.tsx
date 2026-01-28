@@ -33,7 +33,6 @@ export default function AppLayout() {
   const [openCreatePost, setOpenCreatePost] = useState(false);
   const [openEditProfile, setOpenEditProfile] = useState(false);
 
-  // ✅ bootstrap profile 1x di layout
   useEffect(() => {
     if (fetchStatus === "idle") {
       dispatch(fetchProfile());
@@ -48,9 +47,8 @@ export default function AppLayout() {
     []
   );
 
-  // - ketika app baru start → fetchStatus "idle" lalu jadi "loading"
-  // - selama idle/loading → tampilkan loading screen
-  const bootstrapping = fetchStatus === "idle" || fetchStatus === "loading" || loading;
+  const bootstrapping =
+    fetchStatus === "idle" || fetchStatus === "loading" || loading;
 
   if (bootstrapping) {
     return (
@@ -60,9 +58,6 @@ export default function AppLayout() {
     );
   }
 
-  // setelah bootstrapping selesai:
-  // - kalau me ada → tampil user
-  // - kalau me null → tampil guest (final, tanpa flicker)
   return (
     <div className="min-h-screen bg-black text-white">
       <CreatePostDialog open={openCreatePost} onOpenChange={setOpenCreatePost} />
@@ -75,14 +70,15 @@ export default function AppLayout() {
 
       <SidebarLeft onCreatePost={() => setOpenCreatePost(true)} />
 
-      <div className="ml-64 flex justify-center">
+      {/* Mobile & Desktop */}
+      <div className="ml-0 md:ml-64 flex justify-center pt-14 md:pt-0">
         <div className="flex w-full">
           <main className="min-w-0 flex-1 border-x border-zinc-800">
             <Outlet
               context={{
                 openCreatePost: () => setOpenCreatePost(true),
                 openEditProfile: () => setOpenEditProfile(true),
-                me, // optional: kalau page butuh cepat akses user dari outlet context
+                me,
               }}
             />
           </main>

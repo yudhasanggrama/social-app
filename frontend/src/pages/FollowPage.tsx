@@ -11,8 +11,6 @@ import {
 import { selectAvatarVersion, selectMe } from "@/store/profile";
 import { avatarImgSrc } from "@/lib/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
-// ✅ TAMBAHKAN
 import { useNavigate } from "react-router-dom";
 
 type Tab = "followers" | "following";
@@ -21,7 +19,7 @@ export default function FollowPage() {
   const dispatch = useDispatch<AppDispatch>();
   const me = useSelector(selectMe);
   const avatarVersion = useSelector(selectAvatarVersion);
-  const nav = useNavigate(); // ✅ TAMBAHKAN
+  const nav = useNavigate(); 
 
   const [tab, setTab] = useState<Tab>("followers");
 
