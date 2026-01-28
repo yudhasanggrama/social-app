@@ -60,7 +60,7 @@ export function Login() {
                 name: meRes.data.username,
                 })
             );
-            toast.success("Login berhasil");
+            toast.success("Login Successfull");
             navigate("/", { replace: true });
         } catch (err) {
             console.error(err);
