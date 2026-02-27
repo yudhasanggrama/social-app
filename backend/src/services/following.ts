@@ -8,6 +8,7 @@ import type {
   FollowUserInput,
   UnfollowUserInput,
   FollowActionResult,
+  GetFollowListForUserServiceInput,
 } from "../types/followType";
 
 export type EmitFollowChangedParams = {
@@ -16,7 +17,7 @@ export type EmitFollowChangedParams = {
   isFollowing: boolean;
 };
 
-
+// Memisahkan internal DB concern dari external API contract
 function toUserResponse(u: UserDbModel): UserResponse {
   return {
     id: String(u.id),
@@ -28,11 +29,10 @@ function toUserResponse(u: UserDbModel): UserResponse {
 
 export async function getFollowListService(
   input: GetFollowListInput
-): Promise<{ followers: UserResponse[] | FollowerResponse[] }> {
+): Promise<{ followers: FollowerResponse[] }> {
   const { userId, type } = input;
 
   if (type === "followers") {
-    // orang yang follow aku
     const rows = await prisma.following.findMany({
       where: { following_id: userId },
       select: {
@@ -51,7 +51,6 @@ export async function getFollowListService(
     const followerUsers = rows.map((r) => r.follower);
     const followerIds = followerUsers.map((u) => u.id);
 
-    // cek apakah aku follow balik mereka
     const iFollowBack = await prisma.following.findMany({
       where: { follower_id: userId, following_id: { in: followerIds } },
       select: { following_id: true },
@@ -60,7 +59,7 @@ export async function getFollowListService(
     const followedSet = new Set(iFollowBack.map((x) => x.following_id));
 
     const followers: FollowerResponse[] = followerUsers.map((u) => ({
-      ...toUserResponse(u),
+      ...toUserResponse(u as any),
       is_following: followedSet.has(u.id),
     }));
 
@@ -83,10 +82,14 @@ export async function getFollowListService(
     orderBy: { created_at: "desc" },
   });
 
-  // sesuai response kamu: key "followers"
-  const followers: UserResponse[] = rows.map((r) => toUserResponse(r.following));
+  const followers: FollowerResponse[] = rows.map((r) => ({
+    ...toUserResponse(r.following as any),
+    is_following: true, // karena ini daftar yang kamu follow
+  }));
+
   return { followers };
 }
+
 
 export async function followUserService(input: FollowUserInput): Promise<FollowActionResult> {
   const { userId, targetUserId } = input;
@@ -131,6 +134,7 @@ export async function isFollowingService(input: { userId: number; targetUserId: 
     select: { id: true },
   });
 
+  // mengubah nilai apapun menjadi boolean murni isFollow : row bisa object bisa null jika tidak ada
   return { isFollowing: !!row };
 }
 
@@ -162,5 +166,91 @@ export async function getSuggestedUsersService(input: {
   }));
 
   return { users: suggested };
+}
+
+
+export async function getFollowListForUserService(
+  input: GetFollowListForUserServiceInput
+): Promise<{ followers: FollowerResponse[] }> {
+  const { targetUserId, viewerUserId, type } = input;
+
+  // ===== followers =====
+  if (type === "followers") {
+    const rows = await prisma.following.findMany({
+      where: { following_id: targetUserId },
+      select: {
+        follower: {
+          select: {
+            id: true,
+            username: true,
+            full_name: true,
+            photo_profile: true,
+          },
+        },
+      },
+      orderBy: { created_at: "desc" },
+    });
+
+    const users = rows.map((r) => r.follower);
+    const ids = users.map((u) => u.id);
+
+    const viewerFollowing = ids.length
+      ? await prisma.following.findMany({
+          where: { follower_id: viewerUserId, following_id: { in: ids } },
+          select: { following_id: true },
+        })
+      : [];
+
+    const viewerSet = new Set(viewerFollowing.map((x) => x.following_id));
+
+    const followers: FollowerResponse[] = users.map((u) => ({
+      ...(toUserResponse(u as any) as any),
+      is_following: viewerSet.has(u.id),
+    }));
+
+    return { followers };
+  }
+
+  // ===== following =====
+  const rows = await prisma.following.findMany({
+    where: { follower_id: targetUserId },
+    select: {
+      following: {
+        select: {
+          id: true,
+          username: true,
+          full_name: true,
+          photo_profile: true,
+        },
+      },
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  const users = rows.map((r) => r.following);
+  const ids = users.map((u) => u.id);
+
+  let viewerSet = new Set<number>();
+
+  // kalau viewer == target, otomatis true semua
+  if (viewerUserId === targetUserId) {
+    viewerSet = new Set(ids);
+  } else {
+    const viewerFollowing = ids.length
+      ? await prisma.following.findMany({
+          where: { follower_id: viewerUserId, following_id: { in: ids } },
+          select: { following_id: true },
+        })
+      : [];
+
+    viewerSet = new Set(viewerFollowing.map((x) => x.following_id));
+  }
+
+  const followers: FollowerResponse[] = users.map((u) => ({
+    ...(toUserResponse(u as any) as any),
+    is_following: viewerSet.has(u.id),
+  }));
+
+  return { followers };
 }
 

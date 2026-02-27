@@ -15,19 +15,28 @@ export const create = async (req: AuthRequest, res: Response) => {
     }
 
     const files = (req.files as Express.Multer.File[]) ?? [];
-    
-  
-
     const images: string[] = files.map((f) => `uploads/${f.filename}`);
 
     const reply = await createReply(req.user!.id, threadId, content ?? "", images);
+
+  
+    io.emit("reply:created", {
+      threadId,
+      reply: { ...reply, thread_id: threadId },
+    });
+
+    io.emit("thread:reply_count_updated", {
+      threadId,
+      delta: 1,
+      replyId: (reply as any)?.id, // optional
+    });
+
     return res.status(200).json({ reply });
   } catch (err) {
     console.error("[createReply] error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
-
 
 export const findByThreadId = async (req: AuthRequest, res: Response) => {
   try {
@@ -60,23 +69,32 @@ export const findByThreadId = async (req: AuthRequest, res: Response) => {
 
 export const toggleLike = async (req: AuthRequest, res: Response) => {
   try {
-    const replyId = Number(req.body.reply_id);
+    const raw = req.body.reply_id ?? req.body.replyId ?? req.body.id;
+    const replyId = Number(raw);
     const userId = req.user?.id;
 
-    if (!userId || Number.isNaN(replyId)) {
-      return res.status(400).json({ code: 400, status: "error", message: "Invalid request" });
+    if (!userId || !Number.isInteger(replyId) || replyId <= 0) {
+      return res.status(400).json({
+        code: 400,
+        status: "error",
+        message: "Invalid request",
+        debug: { rawReplyId: raw },
+      });
     }
 
     const result = await toggleReplyLike(replyId, userId);
-    // result: { replyId, threadId, likesCount, liked }
 
-    // ✅ broadcast ke semua client (atau bisa ke room thread)
     io.emit("reply:like_updated", {
       replyId: result.replyId,
       threadId: result.threadId,
       likesCount: result.likesCount,
-      actorUserId: userId,
-      liked: result.liked,
+    });
+
+    io.to(`user:${userId}`).emit("reply:like_updated", {
+      replyId: result.replyId,
+      threadId: result.threadId,
+      likesCount: result.likesCount,
+      isLiked: result.liked,
     });
 
     return res.status(200).json({
@@ -90,6 +108,7 @@ export const toggleLike = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ code: 500, status: "error", message: "Internal server error" });
   }
 };
+
 
 
 

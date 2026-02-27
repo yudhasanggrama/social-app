@@ -21,8 +21,7 @@ function normalizeReplies(list: ReplyItem[]) {
     map.set(id, r);
   }
   return Array.from(map.values()).sort(
-    (a: any, b: any) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 }
 
@@ -33,6 +32,13 @@ function pickLikeResult(res: any): { liked?: boolean; likesCount?: number } {
     liked: typeof r?.liked === "boolean" ? r.liked : undefined,
     likesCount: typeof r?.likesCount === "number" ? r.likesCount : undefined,
   };
+}
+
+// ambil boolean yang mungkin datang sebagai liked / isLiked
+function pickLiked(payload: any): boolean | undefined {
+  if (typeof payload?.liked === "boolean") return payload.liked;
+  if (typeof payload?.isLiked === "boolean") return payload.isLiked;
+  return undefined;
 }
 
 export default function ThreadDetailPage() {
@@ -55,7 +61,6 @@ export default function ThreadDetailPage() {
     () => replyFiles.map((f) => URL.createObjectURL(f)),
     [replyFiles]
   );
-
 
   useEffect(() => {
     return () => {
@@ -103,7 +108,11 @@ export default function ThreadDetailPage() {
         const list = (rRes.data.data?.replies ?? []) as ReplyItem[];
         setReplies(normalizeReplies(list));
       } catch (e: any) {
-        if (e?.code === "ERR_CANCELED" || e?.name === "CanceledError" || e?.name === "AbortError")
+        if (
+          e?.code === "ERR_CANCELED" ||
+          e?.name === "CanceledError" ||
+          e?.name === "AbortError"
+        )
           return;
         console.error("Failed to fetch detail thread", e);
         setThread(null);
@@ -138,44 +147,65 @@ export default function ThreadDetailPage() {
   useEffect(() => {
     if (!threadId) return;
 
-    const onThreadLikeUpdated = (p: {
-      threadId: number;
-      likesCount: number;
-      actorUserId: number;
-      liked: boolean;
-    }) => {
-      if (Number(p.threadId) !== threadId) return;
+    // NOTE:
+    // - payload global biasanya cuma { threadId/replyId, likesCount }
+    // - payload khusus user bisa bawa liked/isLiked atau actorUserId+liked (tergantung implementasi backend)
+    const onThreadLikeUpdated = (p: any) => {
+      if (Number(p?.threadId) !== threadId) return;
 
-      setThread((prev: any) =>
-        prev
-          ? {
-              ...prev,
-              likes: p.likesCount,
-              isLiked: p.actorUserId === myUserId ? p.liked : prev.isLiked,
-            }
-          : prev
-      );
+      const liked = pickLiked(p);
+      const actorUserId = typeof p?.actorUserId === "number" ? p.actorUserId : undefined;
+
+      setThread((prev: any) => {
+        if (!prev) return prev;
+
+        const next: any = {
+          ...prev,
+          likes: typeof p?.likesCount === "number" ? p.likesCount : prev.likes,
+        };
+
+        // Update isLiked hanya jika:
+        // 1) payload bawa liked/isLiked boolean, DAN
+        // 2) (kalau ada actorUserId) hanya untuk user yang bersangkutan
+        if (typeof liked === "boolean") {
+          if (typeof actorUserId === "number") {
+            if (actorUserId === myUserId) next.isLiked = liked;
+          } else {
+            // kalau backend kirim user-specific tanpa actorUserId, aman untuk apply
+            next.isLiked = liked;
+          }
+        }
+
+        return next;
+      });
     };
 
-    const onReplyLikeUpdated = (p: {
-      replyId: number;
-      threadId: number;
-      likesCount: number;
-      actorUserId: number;
-      liked: boolean;
-    }) => {
-      if (Number(p.threadId) !== threadId) return;
+    const onReplyLikeUpdated = (p: any) => {
+      if (Number(p?.threadId) !== threadId) return;
+
+      const liked = pickLiked(p);
+      const actorUserId = typeof p?.actorUserId === "number" ? p.actorUserId : undefined;
 
       setReplies((prev) =>
-        prev.map((r: any) =>
-          Number(r.id) === Number(p.replyId)
-            ? {
-                ...r,
-                likes: p.likesCount,
-                isLiked: p.actorUserId === myUserId ? p.liked : r.isLiked,
-              }
-            : r
-        )
+        prev.map((r: any) => {
+          if (Number(r.id) !== Number(p?.replyId)) return r;
+
+          const next: any = {
+            ...r,
+            likes: typeof p?.likesCount === "number" ? p.likesCount : r.likes,
+          };
+
+          // Update isLiked hanya jika payload bawa boolean valid
+          if (typeof liked === "boolean") {
+            if (typeof actorUserId === "number") {
+              if (actorUserId === myUserId) next.isLiked = liked;
+            } else {
+              next.isLiked = liked;
+            }
+          }
+
+          return next;
+        })
       );
     };
 
@@ -287,8 +317,7 @@ export default function ThreadDetailPage() {
 
       const res = await api.post("/replies", fd, { withCredentials: true });
 
-      const newReply =
-        res.data?.data?.reply ?? res.data?.reply ?? res.data?.data ?? res.data;
+      const newReply = res.data?.data?.reply ?? res.data?.reply ?? res.data?.data ?? res.data;
 
       if (newReply) {
         setReplies((prev) => normalizeReplies([newReply as ReplyItem, ...prev]));
@@ -344,9 +373,7 @@ export default function ThreadDetailPage() {
         <div className="flex gap-3">
           <Avatar className="h-10 w-10">
             <AvatarImage src={threadAuthorAvatar} />
-            <AvatarFallback>
-              {(threadAuthor?.name || "U").slice(0, 1).toUpperCase()}
-            </AvatarFallback>
+            <AvatarFallback>{(threadAuthor?.name || "U").slice(0, 1).toUpperCase()}</AvatarFallback>
           </Avatar>
 
           <div className="min-w-0 flex-1">
@@ -436,9 +463,7 @@ export default function ThreadDetailPage() {
               accept="image/*"
               disabled={replyLoading}
               onChange={(e) => {
-                const files = Array.from(e.target.files ?? []).filter((f) =>
-                  f.type.startsWith("image/")
-                );
+                const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
                 if (files.length === 0) return;
                 setReplyFiles((prev) => [...prev, ...files].slice(0, 10));
                 e.currentTarget.value = "";
@@ -494,7 +519,7 @@ export default function ThreadDetailPage() {
       {/* Replies list */}
       <section>
         {replies.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-zinc-500">Belum ada reply</div>
+          <div className="px-4 py-6 text-sm text-zinc-500">No reply yet</div>
         ) : (
           replies.map((r: any) => {
             const replyImgs = Array.isArray(r.image) ? (r.image as string[]) : [];
@@ -510,19 +535,13 @@ export default function ThreadDetailPage() {
                 <div className="flex gap-3">
                   <Avatar className="h-9 w-9">
                     <AvatarImage src={replyAvatar} />
-                    <AvatarFallback>
-                      {(replyAuthor?.name || "U").slice(0, 1).toUpperCase()}
-                    </AvatarFallback>
+                    <AvatarFallback>{(replyAuthor?.name || "U").slice(0, 1).toUpperCase()}</AvatarFallback>
                   </Avatar>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <div className="truncate text-sm font-semibold">
-                        {replyAuthor?.name ?? "Unknown"}
-                      </div>
-                      <div className="truncate text-xs text-zinc-500">
-                        @{replyAuthor?.username ?? "-"}
-                      </div>
+                      <div className="truncate text-sm font-semibold">{replyAuthor?.name ?? "Unknown"}</div>
+                      <div className="truncate text-xs text-zinc-500">@{replyAuthor?.username ?? "-"}</div>
                     </div>
 
                     <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-200">{r.content ?? ""}</p>

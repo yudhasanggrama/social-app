@@ -1,6 +1,6 @@
 import { Response } from "express";
 import type { AuthRequest } from "../middleware/authMiddleware";
-import { getProfileByUserId, updateMyProfile } from "../services/profile";
+import { getProfileByUserId, updateMyProfile, getUserProfileByUsernameService } from "../services/profile";
 
 export async function getProfile(req: AuthRequest, res: Response) {
   try {
@@ -90,3 +90,24 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     });
   }
 };
+
+export const getUserProfile = async (req: AuthRequest, res: Response) => {
+  try {
+    const viewerId = req.user!.id;
+    const username = String(req.params.username ?? "").trim();
+
+    if (!username) {
+      return res.status(400).json({ status: "error", message: "username is required" });
+    }
+
+    const result = await getUserProfileByUsernameService({ viewerId, username });
+
+    if (!result.success && result.reason === "USER_NOT_FOUND") {
+      return res.status(404).json({ status: "error", message: "User not found" });
+    }
+
+    return res.json({ status: "success", data: result.data });
+  } catch {
+    return res.status(500).json({ status: "error", message: "Failed to fetch user profile" });
+  }
+}

@@ -1,4 +1,5 @@
-import { LogOut } from "lucide-react";
+import { useState } from "react";
+import { LogOut, Menu, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SidebarNav } from "./SidebarNav";
 import { useDispatch, useSelector } from "react-redux";
@@ -6,53 +7,36 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { logout } from "@/store";
 import type { AppDispatch } from "@/store/types";
+
 import {
-  fetchProfile,
   selectMe,
   selectIsProfileLoading,
-  selectProfileFetchStatus,
   selectAvatarVersion,
 } from "@/store/profile";
+
 import { avatarImgSrc } from "@/lib/image";
-import { useEffect } from "react";
 import { resetAll } from "@/store/index";
 import { socket } from "@/lib/socket";
 
-
-const SidebarLeft = () => {
+const SidebarLeft = ({ onCreatePost }: { onCreatePost: () => void }) => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
   const me = useSelector(selectMe);
   const loading = useSelector(selectIsProfileLoading);
-  const fetchStatus = useSelector(selectProfileFetchStatus);
   const v = useSelector(selectAvatarVersion);
 
-  // ✅ FIX: fetch profile juga di SidebarLeft
-  // (kalau kamu sudah punya AppLayout fetch global, ini boleh dihapus)
-  useEffect(() => {
-    if (!me && fetchStatus === "idle") dispatch(fetchProfile());
-  }, [dispatch, me, fetchStatus]);
+  const [open, setOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
-      // 1. backend logout (hapus cookie)
       await api.post("/logout", null, { withCredentials: true });
     } catch {
-      // backend boleh gagal, frontend tetap harus bersih
+      // ignore
     } finally {
-      // 2. putus socket akun lama
-      if (socket.connected) {
-        socket.disconnect();
-      }
-
-      // 3. reset SEMUA redux state (profile, follow, likes, dll)
+      if (socket.connected) socket.disconnect();
       dispatch(resetAll());
-
-      // 4. reset auth
       dispatch(logout());
-
-      // 5. pindah halaman
       navigate("/login", { replace: true });
     }
   };
@@ -62,14 +46,28 @@ const SidebarLeft = () => {
   const avatarSrc = avatarImgSrc(me?.avatar, v);
   const fallback = (name[0] ?? "U").toUpperCase();
 
-  return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-zinc-950 border-x">
-      <div className="px-4 py-6">
+  const SidebarContent = (
+    <>
+      <div className="px-4 py-6 flex items-center justify-between">
         <h1 className="text-3xl font-bold text-green-500">circle</h1>
+
+        {/* close button only for mobile drawer */}
+        <button
+          onClick={() => setOpen(false)}
+          className="md:hidden rounded p-2 hover:bg-zinc-900"
+          aria-label="Close sidebar"
+        >
+          <X className="h-5 w-5 text-zinc-200" />
+        </button>
       </div>
 
       <div className="flex-1 px-2">
-        <SidebarNav />
+        <SidebarNav
+          onCreatePost={() => {
+            setOpen(false);
+            onCreatePost();
+          }}
+        />
       </div>
 
       <div className="border-t border-zinc-800 p-4">
@@ -103,7 +101,53 @@ const SidebarLeft = () => {
           />
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* ✅ Mobile topbar (muncul hanya di mobile) */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-zinc-950 border-b border-zinc-800 flex items-center px-4">
+        <button
+          onClick={() => setOpen(true)}
+          className="rounded p-2 hover:bg-zinc-900"
+          aria-label="Open sidebar"
+        >
+          <Menu className="h-5 w-5 text-zinc-200" />
+        </button>
+
+        <div className="flex-1 text-center">
+          <span className="text-lg font-bold text-green-500">circle</span>
+        </div>
+
+        <div className="w-10" />
+      </div>
+
+      {/* ✅ Desktop sidebar (tetap seperti awal, tapi disembunyikan di mobile) */}
+      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-zinc-950 border-x">
+        {SidebarContent}
+      </aside>
+
+      {/* ✅ Mobile overlay */}
+      <div
+        className={[
+          "md:hidden fixed inset-0 z-40 bg-black/60 transition-opacity",
+          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+        ].join(" ")}
+        onClick={() => setOpen(false)}
+      />
+
+      {/* ✅ Mobile drawer */}
+      <aside
+        className={[
+          "md:hidden fixed left-0 top-0 z-50 h-screen w-64 flex-col bg-zinc-950 border-r border-zinc-800 flex",
+          "transition-transform duration-200",
+          open ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+      >
+        {SidebarContent}
+      </aside>
+    </>
   );
 };
 

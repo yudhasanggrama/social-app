@@ -22,6 +22,7 @@ export async function register(full_name: string, username: string, email: strin
 }
 
 export async function login(identifier: string, password: string) {
+    // trim = membersihkan spasi yang tidak perlu
     identifier = identifier.trim().toLowerCase();
     
     const user = await prisma.user.findFirst({
@@ -42,8 +43,6 @@ export async function login(identifier: string, password: string) {
     if (!isPasswordValid) {
         throw new Error("Invalid email or password");
     }
-
-
 
     const token = signToken({id:user.id, email: user.email, username: user.username});
 

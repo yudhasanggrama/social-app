@@ -10,5 +10,7 @@ router.get("/follows", FollowingController.getFollows);
 router.post("/follows", FollowingController.followUser);
 router.delete("/follows", FollowingController.unfollowUser);
 router.get("/follows/suggested", FollowingController.getSuggested);
+router.get("/follows/user/:userId", FollowingController.getFollowsByUserId);
+
 
 export default router;

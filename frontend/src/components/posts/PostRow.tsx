@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, MessageCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +9,7 @@ import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch } from "@/store/types";
 import {
   selectThreadLike,
+  selectThreadLikeMaybe,
   selectLikePending,
   optimisticToggleThread,
   rollbackThread,
@@ -17,7 +18,8 @@ import {
 } from "@/store/likes";
 
 import { publicUrl, avatarImgSrc } from "@/lib/image";
-import { selectAvatarVersion } from "@/store/profile";
+import { selectAvatarVersion, selectMe } from "@/store/profile";
+import type React from "react";
 
 const toNumber = (v: any, fallback = 0) => {
   const n = Number(v);
@@ -29,39 +31,56 @@ export default function PostRow({ thread }: { thread: Thread }) {
   const dispatch = useDispatch<AppDispatch>();
   const v = useSelector(selectAvatarVersion);
 
-  const likeState = useSelector(selectThreadLike(thread.id));
-  const pending = useSelector(selectLikePending(`thread:${thread.id}`));
+  const me = useSelector(selectMe);
 
-  const like = likeState ?? {
-    isLiked: Boolean((thread as any).isLiked),
-    likesCount: toNumber((thread as any).likes),
-  };
+  const tid = toNumber((thread as any).id, 0);
+
+  // ✅ ADDED: raw store value (undefined kalau belum ada)
+  const likeStateMaybe = useSelector(selectThreadLikeMaybe(tid));
+  const likeState = useSelector(selectThreadLike(tid));
+  const pending = useSelector(selectLikePending(`thread:${tid}`));
+
+  // ✅ pakai maybe dulu supaya seed benar
+  const like =
+    likeStateMaybe ??
+    likeState ?? {
+      isLiked: Boolean((thread as any).isLiked),
+      likesCount: toNumber((thread as any).likes),
+    };
 
   useEffect(() => {
-    if (likeState) return;
+    if (!tid) return;
+
+    // ✅ kalau store sudah ada, jangan seed ulang
+    if (likeStateMaybe) return;
+
     dispatch(
       setThreadLikeFromServer({
-        threadId: Number(thread.id),
+        threadId: tid,
         isLiked: Boolean((thread as any).isLiked),
         likesCount: toNumber((thread as any).likes),
       })
     );
-  }, [dispatch, likeState, thread.id]);
+  }, [dispatch, likeStateMaybe, tid, thread]);
 
-  const images =
-    Array.isArray((thread as any).image) && (thread as any).image.length > 0
-      ? (thread as any).image.map((p: string) => publicUrl(p)).filter(Boolean)
-      : [];
+  const images = useMemo(() => {
+    const raw = (thread as any)?.image;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map((p: string) => publicUrl(p)).filter(Boolean);
+    }
+    return [];
+  }, [thread]);
 
   const onToggleLike = async () => {
+    if (!tid) return;
     const prev = like;
 
-    dispatch(optimisticToggleThread({ threadId: thread.id }));
+    dispatch(optimisticToggleThread({ threadId: tid }));
     try {
-      await dispatch(toggleThreadLike(thread.id)).unwrap();
+      await dispatch(toggleThreadLike(tid)).unwrap();
     } catch (e) {
       console.error("Toggle like failed", e);
-      dispatch(rollbackThread({ threadId: thread.id, prev }));
+      dispatch(rollbackThread({ threadId: tid, prev }));
     }
   };
 
@@ -71,18 +90,65 @@ export default function PostRow({ thread }: { thread: Thread }) {
     v
   );
 
+  // ✅ ADDED: klik author -> jika diri sendiri => /profile else => /u/:username
+  const onGoToUser = (e: React.MouseEvent | React.KeyboardEvent) => {
+    // @ts-ignore
+    e.stopPropagation?.();
+
+    const uname = author?.username;
+    if (!uname) return;
+
+    const myUsername = (me as any)?.username;
+    const myId = String((me as any)?.id ?? "");
+    const authorId = String(author?.id ?? "");
+
+    if ((myUsername && uname === myUsername) || (myId && authorId && myId === authorId)) {
+      navigate("/profile");
+      return;
+    }
+
+    navigate(`/u/${uname}`);
+  };
+
+  /**
+   * ✅ ADDED: reply count robust
+   * - tetap prioritas thread.reply (karena kamu sudah seed di beberapa page)
+   * - fallback ke replies_count / reply_count / _count.replies
+   */
+  const replyCount = useMemo(() => {
+    const t: any = thread as any;
+    return toNumber(
+      t?.reply ??
+        t?.replies_count ??
+        t?.reply_count ??
+        t?._count?.replies ??
+        (Array.isArray(t?.replies) ? t.replies.length : 0) ??
+        0,
+      0
+    );
+  }, [thread]);
+
   return (
     <div
-      key={thread.id}
+      key={tid || String((thread as any).id)}
       role="button"
       tabIndex={0}
-      onClick={() => navigate(`/thread/${thread.id}`)}
+      onClick={() => navigate(`/thread/${tid}`)}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") navigate(`/thread/${thread.id}`);
+        if (e.key === "Enter" || e.key === " ") navigate(`/thread/${tid}`);
       }}
       className="flex gap-4 border-b border-zinc-800 px-4 py-4 hover:bg-zinc-900/50"
     >
-      <Avatar>
+      {/* ✅ ADDED: avatar clickable */}
+      <Avatar
+        role="button"
+        tabIndex={0}
+        onClick={onGoToUser}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") onGoToUser(e);
+        }}
+        className="cursor-pointer"
+      >
         <AvatarImage src={authorAvatar} />
         <AvatarFallback>
           {(((author?.name?.[0] ?? "U") as string).toUpperCase())}
@@ -91,22 +157,40 @@ export default function PostRow({ thread }: { thread: Thread }) {
 
       <div className="flex-1">
         <div className="flex flex-wrap items-center gap-1 text-sm">
-          <span className="font-semibold text-zinc-100">
+          {/* ✅ ADDED: name clickable */}
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={onGoToUser}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") onGoToUser(e);
+            }}
+            className="font-semibold text-zinc-100 hover:underline"
+          >
             {author?.name ?? "Unknown"}
           </span>
+
           <span className="text-zinc-400">
-            @{author?.username ?? "unknown"} ·{" "}
-            {(thread as any).created_at
-              ? new Date((thread as any).created_at).toLocaleString()
-              : ""}
+            {/* ✅ ADDED: username clickable */}
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={onGoToUser}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") onGoToUser(e);
+              }}
+              className="hover:underline"
+            >
+              @{author?.username ?? "unknown"}
+            </span>{" "}
+            ·{" "}
+            {(thread as any).created_at ? new Date((thread as any).created_at).toLocaleString() : ""}
           </span>
         </div>
 
-        <p className="mt-1 text-sm leading-relaxed text-zinc-200">
-          {(thread as any).content}
-        </p>
+        <p className="mt-1 text-sm leading-relaxed text-zinc-200">{(thread as any).content}</p>
 
-        {images.length > 0 && <ThreadImages images={images} />}
+        {images.length > 0 && <ThreadImages images={images as any} />}
 
         <div className="mt-3 flex items-center gap-8 text-sm text-zinc-400">
           <button
@@ -126,12 +210,12 @@ export default function PostRow({ thread }: { thread: Thread }) {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/thread/${thread.id}`);
+              navigate(`/thread/${tid}`);
             }}
             className="flex items-center gap-1 hover:text-zinc-200"
           >
             <MessageCircle className="h-4 w-4" />
-            <span>{(thread as any).reply ?? 0}</span>
+            <span>{replyCount}</span>
           </button>
         </div>
       </div>

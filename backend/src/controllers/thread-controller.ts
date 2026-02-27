@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { createThread, getThreadsById, getThreadsFormatted } from "../services/thread";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { io } from "../app";
+import { prisma } from "../prisma/client";
 
 
 export const create = async (req: AuthRequest, res: Response) => {
@@ -15,7 +16,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     const thread = await createThread(req.user!.id, content, images);
 
-    io.emit("thread:created", thread);
+    io.to("feed").emit("thread:created", thread);
 
     return res.status(201).json({ success: true, thread });
   } catch (err) {
@@ -90,5 +91,79 @@ export const findMyThreads = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ code: 500, status: "error", message: "Internal server error" });
   }
 };
+
+export async function getThreadsByUserId(req: AuthRequest, res: Response) {
+  try {
+    const viewerId = req.user?.id; // viewer boleh undefined kalau guest
+    const userId = Number(req.params.userId);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ status: "error", message: "Invalid userId" });
+    }
+
+    const threads = await prisma.thread.findMany({
+      where: { created_by: userId },
+      orderBy: { created_at: "desc" },
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            full_name: true,
+            photo_profile: true,
+          },
+        },
+
+        // ✅ hitung likes + replies dari DB (benar)
+        _count: {
+          select: {
+            likes: true,
+            replies: true,
+          },
+        },
+
+        // ✅ cukup ambil like milik viewer untuk isLiked (lebih ringan daripada ambil semua likes)
+        likes: viewerId
+          ? {
+              where: { user_id: viewerId },
+              select: { id: true },
+            }
+          : false,
+      },
+    });
+
+    const mapped = threads.map((t) => {
+      const isLiked = viewerId ? Array.isArray(t.likes) && t.likes.length > 0 : false;
+
+      return {
+        id: t.id,
+        content: t.content,
+        image: t.image ?? [],
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+
+        likes: t._count.likes,
+        isLiked,
+
+        // ✅ INI YANG BIKIN POSTROW BENAR
+        reply: t._count.replies,
+
+        user: {
+          id: String(t.author.id),
+          username: t.author.username,
+          name: t.author.full_name,
+          avatar: t.author.photo_profile ?? "",
+          photo_profile: t.author.photo_profile ?? "",
+        },
+      };
+    });
+
+    return res.json({ status: "success", data: { threads: mapped } });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ status: "error", message: "Failed to fetch threads" });
+  }
+}
+
 
 

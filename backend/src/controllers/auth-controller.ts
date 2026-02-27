@@ -17,8 +17,6 @@ export async function handleRegister(req: Request, res: Response) {
     } catch (err) {
         return res.status(500).json({message: "Internal server error"});
     }
-
-
 }
 
 export async function handleLogin(req: Request, res: Response) {
@@ -27,11 +25,11 @@ export async function handleLogin(req: Request, res: Response) {
 
     const { token } = await loginService(identifier, password);
 
-    res.cookie("token", token, {
+      res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: "lax",   
+      secure: false, 
+      path: "/",
     });
 
     return res.status(200).json({

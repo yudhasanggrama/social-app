@@ -51,7 +51,7 @@ export const store = configureStore({
     auth: authSlice.reducer,
     likes: likesReducer,
     profile: profileReducer,
-    follow: followReducer, // ✅ penting: key = follow (bukan follows)
+    follow: followReducer,
   },
 });
 

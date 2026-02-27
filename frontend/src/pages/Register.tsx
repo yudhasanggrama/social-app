@@ -33,7 +33,9 @@ const Register = () => {
         try {
         const user = await registerUser(form);
         console.log("SUCCESS:", user.message);
-        navigate("/login");
+        navigate("/login", {
+            state: { fromRegister: true, message: "Account successfully created, You can Login Now" },
+        });
         } catch (err: any) {
         console.error("REGISTER ERROR:", err.response?.data || err.message);
         } finally {
@@ -41,7 +43,7 @@ const Register = () => {
         }
     }
 
-  return (
+    return (
     <>
         <div className="flex h-[336px] mt-[128px] items-center justify-center bg-black-900 px-4">
             <Card className="w-full max-w-sm bg-zinc-950 border-zinc-800">
@@ -78,7 +80,7 @@ const Register = () => {
                                     required
                                 />
                             </div>
-                             <div className="grid gap-2">
+                            <div className="grid gap-2">
                                 <Label htmlFor="email">Email</Label>
                                 <Input
                                     id="email"
@@ -116,7 +118,7 @@ const Register = () => {
             </Card>
         </div>
     </>
-  )
+    )
 }
 
 export default Register

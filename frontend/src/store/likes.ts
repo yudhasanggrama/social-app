@@ -49,33 +49,46 @@ export const toggleReplyLike = createAsyncThunk(
   }
 );
 
+// ✅ patch payload type
+type PatchThreadLike = { threadId: number; isLiked?: boolean; likesCount?: number };
+type PatchReplyLike = { replyId: number; isLiked?: boolean; likesCount?: number };
+
 const likesSlice = createSlice({
   name: "likes",
   initialState,
   reducers: {
-    // Seed data dari API
-    setThreadLikeFromServer(
-      state,
-      action: PayloadAction<{ threadId: number; isLiked: boolean; likesCount: number }>
-    ) {
-      state.thread[action.payload.threadId] = {
-        isLiked: action.payload.isLiked,
-        likesCount: action.payload.likesCount,
-      };
+    // ✅ Seed / socket patch (tidak overwrite kalau field tidak ada)
+    setThreadLikeFromServer(state, action: PayloadAction<PatchThreadLike>) {
+      const { threadId, isLiked, likesCount } = action.payload;
+      const id = Number(threadId);
+      if (!id) return;
+
+      const cur = state.thread[id] ?? { isLiked: false, likesCount: 0 };
+
+      if (likesCount !== undefined) cur.likesCount = Number(likesCount);
+      if (typeof isLiked === "boolean") cur.isLiked = isLiked;
+
+      state.thread[id] = cur;
     },
-    setReplyLikeFromServer(
-      state,
-      action: PayloadAction<{ replyId: number; isLiked: boolean; likesCount: number }>
-    ) {
-      state.reply[action.payload.replyId] = {
-        isLiked: action.payload.isLiked,
-        likesCount: action.payload.likesCount,
-      };
+
+    setReplyLikeFromServer(state, action: PayloadAction<PatchReplyLike>) {
+      const { replyId, isLiked, likesCount } = action.payload;
+      const id = Number(replyId);
+      if (!id) return;
+
+      const cur = state.reply[id] ?? { isLiked: false, likesCount: 0 };
+
+      if (likesCount !== undefined) cur.likesCount = Number(likesCount);
+      if (typeof isLiked === "boolean") cur.isLiked = isLiked;
+
+      state.reply[id] = cur;
     },
 
     // Optimistic update
     optimisticToggleThread(state, action: PayloadAction<{ threadId: number }>) {
-      const { threadId } = action.payload;
+      const threadId = Number(action.payload.threadId);
+      if (!threadId) return;
+
       const cur = state.thread[threadId] ?? { isLiked: false, likesCount: 0 };
 
       state.thread[threadId] = {
@@ -87,7 +100,9 @@ const likesSlice = createSlice({
     },
 
     optimisticToggleReply(state, action: PayloadAction<{ replyId: number }>) {
-      const { replyId } = action.payload;
+      const replyId = Number(action.payload.replyId);
+      if (!replyId) return;
+
       const cur = state.reply[replyId] ?? { isLiked: false, likesCount: 0 };
 
       state.reply[replyId] = {
@@ -100,13 +115,19 @@ const likesSlice = createSlice({
 
     // Rollback kalau request gagal
     rollbackThread(state, action: PayloadAction<{ threadId: number; prev: LikeInfo }>) {
-      state.thread[action.payload.threadId] = action.payload.prev;
-      state.pending[`thread:${action.payload.threadId}`] = false;
+      const threadId = Number(action.payload.threadId);
+      if (!threadId) return;
+
+      state.thread[threadId] = action.payload.prev;
+      state.pending[`thread:${threadId}`] = false;
     },
 
     rollbackReply(state, action: PayloadAction<{ replyId: number; prev: LikeInfo }>) {
-      state.reply[action.payload.replyId] = action.payload.prev;
-      state.pending[`reply:${action.payload.replyId}`] = false;
+      const replyId = Number(action.payload.replyId);
+      if (!replyId) return;
+
+      state.reply[replyId] = action.payload.prev;
+      state.pending[`reply:${replyId}`] = false;
     },
   },
 
@@ -114,15 +135,19 @@ const likesSlice = createSlice({
     builder
       .addCase(toggleThreadLike.fulfilled, (state, action) => {
         const { threadId, liked, likesCount } = action.payload;
+        const id = Number(threadId);
+        if (!id) return;
 
-        state.thread[threadId] = { isLiked: liked, likesCount };
-        state.pending[`thread:${threadId}`] = false;
+        state.thread[id] = { isLiked: liked, likesCount };
+        state.pending[`thread:${id}`] = false;
       })
       .addCase(toggleReplyLike.fulfilled, (state, action) => {
         const { replyId, liked, likesCount } = action.payload;
+        const id = Number(replyId);
+        if (!id) return;
 
-        state.reply[replyId] = { isLiked: liked, likesCount };
-        state.pending[`reply:${replyId}`] = false;
+        state.reply[id] = { isLiked: liked, likesCount };
+        state.pending[`reply:${id}`] = false;
       });
   },
 });
@@ -140,9 +165,17 @@ export default likesSlice.reducer;
 
 // selectors
 export const selectThreadLike = (threadId: number) => (s: RootState) =>
-  s.likes.thread[threadId] ?? { isLiked: false, likesCount: 0 };
+  s.likes.thread[Number(threadId)] ?? { isLiked: false, likesCount: 0 };
 
 export const selectReplyLike = (replyId: number) => (s: RootState) =>
-  s.likes.reply[replyId] ?? { isLiked: false, likesCount: 0 };
+  s.likes.reply[Number(replyId)] ?? { isLiked: false, likesCount: 0 };
 
-export const selectLikePending = (key: string) => (s: RootState) => Boolean(s.likes.pending[key]);
+export const selectLikePending = (key: string) => (s: RootState) =>
+  Boolean(s.likes.pending[key]);
+
+export const selectThreadLikeMaybe = (threadId: number) => (s: RootState) =>
+  s.likes.thread[Number(threadId)];
+
+export const selectReplyLikeMaybe = (replyId: number) => (s: RootState) =>
+  s.likes.reply[Number(replyId)];
+

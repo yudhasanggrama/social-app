@@ -5,21 +5,29 @@ import { io } from "../app"; // sesuaikan path
 
 export const toggle = async (req: AuthRequest, res: Response) => {
   try {
-    const { thread_id } = req.body;
+    const threadId = Number(req.body.thread_id);
+    const userId = req.user?.id;
 
-    const result = await toggleLike(req.user!.id, Number(thread_id));
+    if (!userId || Number.isNaN(threadId) || threadId <= 0) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
 
-    res.status(200).json({ result });
+    const result = await toggleLike(userId, threadId);
+
+    res.status(200).json({message:"Success to toogle like" ,result });
 
     io.emit("thread:like_updated", {
       threadId: result.threadId,
       likesCount: result.likesCount,
-      actorUserId: req.user!.id,
-      liked: result.liked,
     });
 
-
+    io.to(`user:${userId}`).emit("thread:like_updated", {
+      threadId: result.threadId,
+      likesCount: result.likesCount,
+      isLiked: result.liked,
+    });
   } catch (e) {
-    res.status(500).json({ message: "Failed to toggle like" });
+    console.error("[toggleLike] error:", e);
+    return res.status(500).json({ message: "Failed to toggle like" });
   }
 };
