@@ -15,8 +15,11 @@ export const cacheGet =
         const cached = await redis.get(key);
 
         if (cached) {
-            res.setHeader("X-Cache", "HIT");
-            return res.status(200).json(JSON.parse(cached));
+          const value =
+            typeof cached === "string" ? cached : cached.toString();
+
+          res.setHeader("X-Cache", "HIT");
+          return res.status(200).json(JSON.parse(value));
         }
 
         const originalJson = res.json.bind(res);
@@ -57,21 +60,28 @@ export const invalidateAfter =
         for (const item of list) {
           if (!item) continue;
 
-          if (item.includes("*")) {
-            let cursor = "0";
+            if (item.includes("*")) {
+              let cursor = "0";
 
-            do {
-              const { cursor: nextCursor, keys } = await redis.scan(cursor, {
-                MATCH: item,
-                COUNT: 200,
-              });
+              do {
+                const result = await redis.scan(cursor, {
+                  MATCH: item,
+                  COUNT: 200,
+                });
 
-              cursor = nextCursor;
+                const nextCursor =
+                  typeof result.cursor === "string"
+                    ? result.cursor
+                    : result.cursor.toString();
 
-              if (keys.length > 0) {
-                await redis.del(keys);
-              }
-            } while (cursor !== "0");
+                const keys = result.keys;
+
+                cursor = nextCursor;
+
+                if (keys.length > 0) {
+                  await redis.del(keys);
+                }
+              } while (cursor !== "0");
           } else {
             await redis.del(item);
           }
