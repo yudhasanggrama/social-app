@@ -15,7 +15,7 @@ async function bootstrap() {
   // TAMBAHKAN "0.0.0.0" di sini agar bisa diakses secara publik
   server.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`API   : https://social-app-production-3828.up.railway.app/api/v1`);
+    console.log(`API   : https://social-app-production-75eb.up.railway.app/api/v1`);
   });
 }
 
