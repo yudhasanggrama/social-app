@@ -1,11 +1,7 @@
+const ORIGIN = import.meta.env.VITE_API_URL;
 
-const ORIGIN = "http://localhost:9000";
 export const DEFAULT_AVATAR = `${ORIGIN}/uploads/default-avatar.png`;
 
-/**
- * Return string URL atau undefined (bukan "")
- * cocok untuk AvatarImage (karena src?: string)
- */
 export const publicUrl = (p?: string | null): string | undefined => {
   if (!p) return undefined;
   if (p.startsWith("http")) return p;
@@ -15,10 +11,6 @@ export const publicUrl = (p?: string | null): string | undefined => {
   return `${ORIGIN}/${p}`;
 };
 
-/**
- * Return URL string pasti (dengan fallback)
- * cocok untuk <img> biasa
- */
 export const publicUrlWithFallback = (
   p?: string | null,
   fallback: string = DEFAULT_AVATAR
@@ -26,18 +18,10 @@ export const publicUrlWithFallback = (
   return publicUrl(p) ?? fallback;
 };
 
-/**
- * Untuk avatar shadcn: kalau tidak ada avatar -> undefined,
- * biar AvatarFallback yang tampil.
- */
 export const avatarSrc = (avatar?: string | null): string | undefined => {
   return publicUrl(avatar);
 };
 
-/**
- * Untuk <img> avatar (bukan shadcn), selalu ada gambar fallback.
- * bisa cache bust dengan versi.
- */
 export const avatarImgSrc = (
   avatar?: string | null,
   version?: number,
