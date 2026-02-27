@@ -12,8 +12,7 @@ async function bootstrap() {
   }
 
   server.listen(PORT, () => {
-    console.log(`API   : http://localhost:${PORT}/api/v1`);
-    console.log(`DOCS  : http://localhost:${PORT}/docs`);
+    console.log(`🚀 Server is live on port ${PORT}`);
   });
 }
 

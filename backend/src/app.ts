@@ -8,22 +8,22 @@ import { Server } from "socket.io";
 import * as cookie from "cookie";
 import jwt from "jsonwebtoken";
 
-// ✅ router utama kamu
 import router from "./routes/index";
-
-// ✅ swagger
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./swagger";
-
-// ✅ redis (node-redis)
 import { connectRedis } from "./lib/redis";
 
 const app = express();
 
-/** ========= Middlewares ========= */
+/** 1. Buat HTTP Server dulu */
+const server = http.createServer(app);
+
+/** 2. Konfigurasi CORS Express */
+const allowedOrigin = "https://social-app-eta-azure.vercel.app";
+
 app.use(
   cors({
-    origin: "https://social-app-eta-azure.vercel.app/",
+    origin: allowedOrigin,
     credentials: true,
   })
 );
@@ -32,40 +32,28 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// static uploads
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-
-// health check (buat cek server hidup)
-app.get("/health", (_req, res) => res.json({ ok: true }));
-
-/** ========= Swagger UI =========
- * /docs (bukan /api/v1/docs)
- */
-app.use(
-  "/docs",
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec, {
-    swaggerOptions: {
-      withCredentials: true, // penting kalau mau cookie ikut ke request swagger
-    },
-  })
-);
-
-/** ========= API Routes ========= */
-app.use("/api/v1", router);
-
-/** ========= HTTP Server + Socket.IO ========= */
-const server = http.createServer(app);
-
+/** 3. Inisialisasi Socket.IO (Cukup SATU kali deklarasi) */
 export const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: allowedOrigin, // Gunakan URL Vercel
     credentials: true,
   },
   transports: ["websocket"],
 });
 
-// Socket auth pakai cookie token (mirip punyamu)
+// static uploads
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+// health check
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
+/** API Routes */
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    swaggerOptions: { withCredentials: true },
+}));
+app.use("/api/v1", router);
+
+/** Socket Logic */
 io.use((socket, next) => {
   try {
     const raw = socket.request.headers.cookie;
@@ -79,8 +67,6 @@ io.use((socket, next) => {
     if (!secret) return next(new Error("JWT_SECRET not set"));
 
     const payload = jwt.verify(token, secret);
-
-    // simpan payload supaya bisa dipakai di event handler
     (socket.data as any).user = payload;
 
     return next();
@@ -90,42 +76,17 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  // ✅ join room feed
   socket.join("feed");
-
-  // ✅ AUTO JOIN room user:<id> (supaya io.to(`user:${id}`).emit nyampe)
   const u = (socket.data as any).user;
-
-  // coba ambil id dari beberapa kemungkinan field
-  const myIdRaw = (u as any)?.id ?? (u as any)?.userId ?? (u as any)?.sub ?? 0;
+  const myIdRaw = u?.id ?? u?.userId ?? u?.sub ?? 0;
   const myId = Number(myIdRaw);
 
   if (Number.isFinite(myId) && myId > 0) {
     socket.join(`user:${myId}`);
-    console.log("✅ joined room:", `user:${myId}`, "socket:", socket.id);
-  } else {
-    console.log("⚠️ socket connected but user id missing in JWT payload:", u);
+    console.log("✅ joined room:", `user:${myId}`);
   }
 
-  // ✅ OPTIONAL: allow explicit join from client (berguna kalau mau)
-  socket.on("user:join", ({ userId }) => {
-    const uid = Number(userId);
-    if (!Number.isFinite(uid) || uid <= 0) return;
-    socket.join(`user:${uid}`);
-    console.log("✅ user:join:", `user:${uid}`, "socket:", socket.id);
-  });
-
-  socket.on("user:leave", ({ userId }) => {
-    const uid = Number(userId);
-    if (!Number.isFinite(uid) || uid <= 0) return;
-    socket.leave(`user:${uid}`);
-    console.log("✅ user:leave:", `user:${uid}`, "socket:", socket.id);
-  });
-
-  // contoh event
-  socket.on("ping", () => {
-    socket.emit("pong");
-  });
+  socket.on("ping", () => socket.emit("pong"));
 });
 
 export default server;
