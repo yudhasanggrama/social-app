@@ -1,10 +1,16 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "node",
     "target": "ES2023",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": "./dist",            // ✅ Folder hasil compile (ini yang dijalankan npm start)
+    "rootDir": "./src",           // ✅ Folder sumber kode kamu
     "strict": true,
     "esModuleInterop": true,
-    // "ignoreDeprecations": "6.0",
-  }
+    "skipLibCheck": true,         // ✅ WAJIB: Untuk memperbaiki error 'ws' tadi
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],        // ✅ Pastikan hanya file di src yang di-compile
+  "exclude": ["node_modules", "**/*.test.ts"]
 }
