@@ -2,7 +2,11 @@
 import server from "./app";
 import { connectRedis } from "./lib/redis";
 
-const PORT = process.env.PORT || 3000; 
+const PORT = process.env.PORT;
+
+if (!PORT) {
+  throw new Error("PORT is not defined");
+}
 
 async function bootstrap() {
   try {
