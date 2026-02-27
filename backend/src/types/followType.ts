@@ -34,7 +34,7 @@ export type UnfollowUserInput = { userId: number; targetUserId: number };
 
 // discriminate union untuk hasil aksi
 export type FollowActionResult =
-  | { success: true }
+  | { success: true; reason?: never }
   | { success: false; reason: "USER_NOT_FOUND" };
 
 // payload untuk websocket (realtime follow/unfollow)

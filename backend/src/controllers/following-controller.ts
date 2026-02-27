@@ -57,8 +57,18 @@ export async function followUser(req: AuthRequest, res: Response) {
 
     const result = await followUserService({ userId, targetUserId });
 
-    if (!result.success && result.reason === "USER_NOT_FOUND") {
-      return res.status(404).json({ status: "error", message: "User not found." });
+   if (!result.success) {
+      if (result.reason === "USER_NOT_FOUND") {
+        return res.status(404).json({
+          status: "error",
+          message: "User not found.",
+        });
+      }
+
+      return res.status(400).json({
+        status: "error",
+        message: "Follow action failed.",
+      });
     }
 
     // ✅ ambil data FOLLOWER (aku)
