@@ -1,11 +1,9 @@
-node_modules
-# Keep environment variables out of version control
+node_modules/
+dist/
 .env
 
+# Jangan masukkan tsconfig.json ke sini!
+# Karena Render butuh file itu untuk proses build.
+
 /src/generated/prisma
-
-# TypeScript config
-tsconfig.json
-
 uploads/
-
