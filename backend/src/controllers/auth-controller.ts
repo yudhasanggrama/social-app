@@ -25,15 +25,15 @@ export async function handleLogin(req: Request, res: Response) {
 
     const { token } = await loginService(identifier, password);
 
-      res.cookie("token", token, {
+    res.cookie("token", token, {
       httpOnly: true,
-      sameSite: "lax",   
-      secure: false, 
+      secure: true,
+      sameSite: "none",
       path: "/",
     });
 
     return res.status(200).json({
-      message: "Login success", token
+      message: "Login success",
     });
   } catch (err: any) {
     return res.status(401).json({
@@ -45,11 +45,12 @@ export async function handleLogin(req: Request, res: Response) {
 export function handleLogout(req: Request, res: Response) {
   res.clearCookie("token", {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-  })
+    secure: true,
+    sameSite: "none",
+    path: "/",
+  });
 
-  res.status(200).json({ message: "Logout success" })
+  res.status(200).json({ message: "Logout success" });
 }
 
 
