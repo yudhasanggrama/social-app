@@ -17,7 +17,7 @@ import { swaggerSpec } from "./swagger";
 
 const app = express();
 
-const allowedOrigin = process.env.FRONTEND_URL || "https://social-app-eta-azure.vercel.app";
+const allowedOrigin = process.env.FRONTEND_URL || "https://social-app-nu-pearl.vercel.app/";
 
 /** ========= Middlewares ========= */
 app.use(
