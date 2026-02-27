@@ -23,7 +23,7 @@ const app = express();
 /** ========= Middlewares ========= */
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "https://social-app-eta-azure.vercel.app/",
     credentials: true,
   })
 );
