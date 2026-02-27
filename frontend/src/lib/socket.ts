@@ -1,7 +1,7 @@
 import { io, Socket } from "socket.io-client";
 
 // Ambil URL dari environment variable
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL;
+const SOCKET_URL = "https://social-app-production-75eb.up.railway.app";
 
 export const socket: Socket = io(SOCKET_URL, {
   transports: ["websocket"],
