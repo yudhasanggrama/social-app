@@ -3,14 +3,13 @@
     "target": "ES2023",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "outDir": "./dist",            // ✅ Folder hasil compile (ini yang dijalankan npm start)
-    "rootDir": "./src",           // ✅ Folder sumber kode kamu
-    "strict": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
     "esModuleInterop": true,
-    "skipLibCheck": true,         // ✅ WAJIB: Untuk memperbaiki error 'ws' tadi
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],        // ✅ Pastikan hanya file di src yang di-compile
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "**/*.test.ts"]
 }
