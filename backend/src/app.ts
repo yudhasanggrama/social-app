@@ -15,15 +15,14 @@ import router from "./routes/index";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./swagger";
 
-// ✅ redis (node-redis)
-import { connectRedis } from "./lib/redis";
-
 const app = express();
+
+const allowedOrigin = process.env.FRONTEND_URL || "https://social-app-eta-azure.vercel.app";
 
 /** ========= Middlewares ========= */
 app.use(
   cors({
-    origin: "https://social-app-eta-azure.vercel.app",
+    origin: allowedOrigin,
     credentials: true,
   })
 );
@@ -59,7 +58,7 @@ const server = http.createServer(app);
 
 export const io = new Server(server, {
   cors: {
-    origin: "https://social-app-eta-azure.vercel.app",
+    origin: allowedOrigin,
     credentials: true,
   },
   transports: ["websocket"],
