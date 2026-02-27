@@ -15,22 +15,28 @@ export const create = async (req: AuthRequest, res: Response) => {
     }
 
     const files = (req.files as Express.Multer.File[]) ?? [];
-    
-  
-
     const images: string[] = files.map((f) => `uploads/${f.filename}`);
 
     const reply = await createReply(req.user!.id, threadId, content ?? "", images);
+
+  
     io.emit("reply:created", {
-      threadId, reply: {...reply, thread_id: threadId}
-    })
+      threadId,
+      reply: { ...reply, thread_id: threadId },
+    });
+
+    io.emit("thread:reply_count_updated", {
+      threadId,
+      delta: 1,
+      replyId: (reply as any)?.id, // optional
+    });
+
     return res.status(200).json({ reply });
   } catch (err) {
     console.error("[createReply] error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
-
 
 export const findByThreadId = async (req: AuthRequest, res: Response) => {
   try {

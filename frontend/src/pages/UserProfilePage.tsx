@@ -316,14 +316,27 @@ export default function UserProfilePage() {
               )}
 
               <div className="mt-2 flex gap-4 text-sm">
-                <span>
+                <button
+                  onClick={() =>
+                    nav(`/u/${profile?.username}/follows?tab=following`)
+                  }
+                  className="flex gap-1 hover:underline"
+                  type="button"
+                >
                   <b>{profile?.following_count ?? 0}</b>{" "}
                   <span className="text-zinc-400">Following</span>
-                </span>
-                <span>
+                </button>
+
+                <button
+                  onClick={() =>
+                    nav(`/u/${profile?.username}/follows?tab=followers`)
+                  }
+                  className="flex gap-1 hover:underline"
+                  type="button"
+                >
                   <b>{profile?.follower_count ?? 0}</b>{" "}
                   <span className="text-zinc-400">Followers</span>
-                </span>
+                </button>
               </div>
             </>
           )}

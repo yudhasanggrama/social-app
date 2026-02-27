@@ -20,7 +20,7 @@ export default function PostItem() {
 
   const me = useSelector(selectMe);
   const v = useSelector(selectAvatarVersion);
-  
+
   const patchMyAvatar = useCallback(
     (newAvatar: string) => {
       setThreads((prev) =>
@@ -126,6 +126,33 @@ export default function PostItem() {
       dispatch(setThreadLikeFromServer(patch));
     };
 
+    // ✅ NEW: realtime reply count updated
+    const onReplyCountUpdated = (payload: any) => {
+      const threadId = toNumber(payload?.threadId ?? payload?.id, 0);
+      if (!threadId) return;
+
+      const delta = toNumber(payload?.delta ?? 1, 1);
+
+      setThreads((prev) =>
+        prev.map((t: any) => {
+          if (toNumber(t.id) !== threadId) return t;
+
+          const next: any = { ...t };
+
+          // field yang kamu pakai di thread-controller.ts adalah `reply`
+          const currentReply = toNumber(next.reply ?? next.replies_count ?? next.reply_count ?? 0, 0);
+          const updated = Math.max(0, currentReply + delta);
+
+          // ✅ update semua kemungkinan field biar aman untuk page lain
+          next.reply = updated;
+          if (next.replies_count !== undefined) next.replies_count = updated;
+          if (next.reply_count !== undefined) next.reply_count = updated;
+
+          return next;
+        })
+      );
+    };
+
     // (opsional) realtime avatar lewat socket
     const onAvatarUpdated = (payload: any) => {
       const userId = toNumber(payload?.userId ?? payload?.id, 0);
@@ -137,11 +164,13 @@ export default function PostItem() {
 
     socket.on("thread:created", onThreadCreated);
     socket.on("thread:like_updated", onLikeUpdated);
-    socket.on("profile:avatar_updated", onAvatarUpdated); // kalau event ini ada
+    socket.on("thread:reply_count_updated", onReplyCountUpdated);
+    socket.on("profile:avatar_updated", onAvatarUpdated);
 
     return () => {
       socket.off("thread:created", onThreadCreated);
       socket.off("thread:like_updated", onLikeUpdated);
+      socket.off("thread:reply_count_updated", onReplyCountUpdated);
       socket.off("profile:avatar_updated", onAvatarUpdated);
     };
   }, [dispatch, me?.id, patchMyAvatar]);

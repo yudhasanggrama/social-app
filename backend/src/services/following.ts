@@ -8,6 +8,7 @@ import type {
   FollowUserInput,
   UnfollowUserInput,
   FollowActionResult,
+  GetFollowListForUserServiceInput,
 } from "../types/followType";
 
 export type EmitFollowChangedParams = {
@@ -165,5 +166,91 @@ export async function getSuggestedUsersService(input: {
   }));
 
   return { users: suggested };
+}
+
+
+export async function getFollowListForUserService(
+  input: GetFollowListForUserServiceInput
+): Promise<{ followers: FollowerResponse[] }> {
+  const { targetUserId, viewerUserId, type } = input;
+
+  // ===== followers =====
+  if (type === "followers") {
+    const rows = await prisma.following.findMany({
+      where: { following_id: targetUserId },
+      select: {
+        follower: {
+          select: {
+            id: true,
+            username: true,
+            full_name: true,
+            photo_profile: true,
+          },
+        },
+      },
+      orderBy: { created_at: "desc" },
+    });
+
+    const users = rows.map((r) => r.follower);
+    const ids = users.map((u) => u.id);
+
+    const viewerFollowing = ids.length
+      ? await prisma.following.findMany({
+          where: { follower_id: viewerUserId, following_id: { in: ids } },
+          select: { following_id: true },
+        })
+      : [];
+
+    const viewerSet = new Set(viewerFollowing.map((x) => x.following_id));
+
+    const followers: FollowerResponse[] = users.map((u) => ({
+      ...(toUserResponse(u as any) as any),
+      is_following: viewerSet.has(u.id),
+    }));
+
+    return { followers };
+  }
+
+  // ===== following =====
+  const rows = await prisma.following.findMany({
+    where: { follower_id: targetUserId },
+    select: {
+      following: {
+        select: {
+          id: true,
+          username: true,
+          full_name: true,
+          photo_profile: true,
+        },
+      },
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  const users = rows.map((r) => r.following);
+  const ids = users.map((u) => u.id);
+
+  let viewerSet = new Set<number>();
+
+  // kalau viewer == target, otomatis true semua
+  if (viewerUserId === targetUserId) {
+    viewerSet = new Set(ids);
+  } else {
+    const viewerFollowing = ids.length
+      ? await prisma.following.findMany({
+          where: { follower_id: viewerUserId, following_id: { in: ids } },
+          select: { following_id: true },
+        })
+      : [];
+
+    viewerSet = new Set(viewerFollowing.map((x) => x.following_id));
+  }
+
+  const followers: FollowerResponse[] = users.map((u) => ({
+    ...(toUserResponse(u as any) as any),
+    is_following: viewerSet.has(u.id),
+  }));
+
+  return { followers };
 }
 

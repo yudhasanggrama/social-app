@@ -314,14 +314,23 @@ export default function MyProfilePage() {
           <div className="mt-2 text-sm text-zinc-300">{me?.bio ?? ""}</div>
 
           <div className="mt-2 flex gap-4 text-sm">
-            <span>
+            <button
+              onClick={() => nav("/follow")}
+              className="flex gap-1 hover:underline"
+              type="button"
+            >
               <b>{(me as any)?.following_count ?? 0}</b>{" "}
               <span className="text-zinc-400">Following</span>
-            </span>
-            <span>
+            </button>
+
+            <button
+              onClick={() => nav("/follow")}
+              className="flex gap-1 hover:underline"
+              type="button"
+            >
               <b>{(me as any)?.follower_count ?? 0}</b>{" "}
               <span className="text-zinc-400">Followers</span>
-            </span>
+            </button>
           </div>
         </div>
 

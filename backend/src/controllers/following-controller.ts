@@ -1,9 +1,17 @@
-import type { Response } from "express";
+import type { NextFunction, RequestHandler, Response } from "express";
 import type { AuthRequest } from "../middleware/authMiddleware";
 import type { FollowQueryType, UserDbModel, UserResponse } from "../types/followType";
-import { getFollowListService, followUserService, unfollowUserService, isFollowingService, getSuggestedUsersService } from "../services/following";
+import { getFollowListService, followUserService, unfollowUserService, isFollowingService, getSuggestedUsersService, getFollowListForUserService } from "../services/following";
 import { io } from "../app";
 import { prisma } from "../prisma/client";
+import type { ParsedQs } from "qs";
+
+type FollowParams = { userId: string };
+
+// ✅ penting: gabung dengan ParsedQs
+type FollowQuery = ParsedQs & {
+  type?: string; // nanti diparse jadi FollowQueryType
+};
 
 export async function getFollows(req: AuthRequest, res: Response) {
   try {
@@ -189,6 +197,76 @@ export async function getSuggested(req: AuthRequest, res: Response) {
   }
 }
 
+function parseFollowType(v: unknown): FollowQueryType {
+  const s = Array.isArray(v) ? v[0] : v;
+  return s === "following" ? "following" : "followers";
+}
 
+export const getFollowListForUserController: RequestHandler<
+  FollowParams,
+  any,
+  any,
+  FollowQuery
+> = async (req, res, next) => {
+  try {
+    const targetUserId = Number(req.params.userId);
+    const type = parseFollowType(req.query.type);
+
+    const viewerUserId = Number((req as any).user?.id);
+
+    if (!Number.isFinite(targetUserId)) {
+      return res.status(400).json({ message: "Invalid userId param" });
+    }
+
+    if (!Number.isFinite(viewerUserId)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const result = await getFollowListForUserService({
+      targetUserId,
+      viewerUserId,
+      type,
+    });
+
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export async function getFollowsByUserId(req: AuthRequest, res: Response) {
+  try {
+    const viewerUserId = req.user!.id;
+    const targetUserId = Number(req.params.userId);
+
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "Param `userId` must be a positive integer.",
+      });
+    }
+
+    const typeRaw = String(req.query.type ?? "");
+    if (typeRaw !== "followers" && typeRaw !== "following") {
+      return res.status(400).json({
+        status: "error",
+        message: "Query `type` must be `followers` or `following`.",
+      });
+    }
+
+    const data = await getFollowListForUserService({
+      targetUserId,
+      viewerUserId,
+      type: typeRaw as any,
+    });
+
+    return res.json({ status: "success", data });
+  } catch {
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to fetch follower/following data. Please try again later.",
+    });
+  }
+}
 
 
